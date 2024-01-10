@@ -1,0 +1,40 @@
+# workspace: &workspace "/workspace/zhaoty/emridetection/"
+PI: &PI 3.141592653589793116
+TWO_PI: &TWO_PI 6.283185307179586232
+
+waveform:
+  use_gpu: True
+  T: 1 # [yr]
+  dt: 15
+  tdi_gen: "1st generation"
+  tdi_chan: "AE"
+  det: "LISA"
+  t0: 30000
+  # orbit_file: "/workspace/zhaoty/emridetection/emridetection/gw/orbit/h5/orbit.hdf5"
+  orbit_file: "/workspace/zhty/EMRI_Detection/emridetection/emridetection/gw/orbit/h5/orbit.hdf5"
+
+dataset:
+  n_train: 10
+  n_test: 1000
+  whitten: True
+  save_path: "/workspace/zhty/EMRI_Detection/emridetection/datasets/"
+  # fn: "emri_fftmf_v0.1_snr_40_120_n_2k-1.hdf5"
+  fn: "emri_asd_v0.5_50_120_1yr_M_5_z_0.1.hdf5"
+  # fn: test_fftmf.hdf5
+  trg_len: 4096
+
+parameters:
+  M: [5, 8] # log10(M) [Msun]
+  mu: [10, 10]
+  a: [1e-3, 0.99]
+  p0: [15, 25]
+  e0: [1e-3, 0.8]
+  Y0: [-0.98, 0.99]
+  snr: [50, 120]
+  qS: [1e-3, *PI]
+  phiS: [1e-3, *TWO_PI]
+  qK: [1e-3, *PI]
+  phiK: [1e-3, *TWO_PI]
+  Phi_phi0: [0, 0]
+  Phi_theta0: [0, 0]
+  Phi_r0: [0, 0]

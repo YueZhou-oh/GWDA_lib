@@ -1,0 +1,35 @@
+name: test
+channels:
+  - local
+  - conda-forge
+dependencies:
+  - astropy
+  - gwdatafind
+  - gwosc
+  - gwpy
+  - gwtools
+  - h5py
+  - hdf5
+  - numba
+  - pip
+  - pycbc
+  - python=3.8.10
+  - pip:
+    - astropy
+    - flake8
+    - matplotlib
+    - numpy
+    - pandas
+    - psd
+    - rich
+    - scikit-learn
+    - seaborn
+    - speechbrain==0.5.11
+    - torch==1.10.1
+    - torch-optimizer==0.1.0
+    - torchaudio==0.10.1
+    - torchmetrics==0.6.2
+    - torchsummary==1.5.1
+    - torchtext==0.11.1
+    - torchvision==0.11.2
+    - tqdm
