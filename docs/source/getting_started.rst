@@ -1,18 +1,22 @@
-Usage
-=====
+===============
+Getting started
+===============
 
+.. autosummary::
+   :toctree: generated
+   
 .. _installation:
 
 Installation
 ------------
 
-To use Lumache, first install it using pip:
+To use GWDA, first install it using pip:
 
 .. code-block:: console
 
-   (.venv) $ pip install lumache
+   (.venv) $ pip install xxx
 
-Creating recipes
+Modules
 ----------------
 
 To retrieve a list of random ingredients,
@@ -28,6 +32,6 @@ will raise an exception.
 
 For example:
 
->>> import lumache
+>>> import gwda
 >>> lumache.get_random_ingredients()
 ['shells', 'gorgonzola', 'parsley']
