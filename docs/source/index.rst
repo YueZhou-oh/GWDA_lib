@@ -6,7 +6,7 @@ Welcome to GWDA's documentation!
 to xxxx.
 
 Check out the :doc:`getting_started` section for further information, including
-how to :ref:`installation` the project.
+how to :ref:`install` the project.
 
 .. note::
 
