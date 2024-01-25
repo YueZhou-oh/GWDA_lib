@@ -43,10 +43,12 @@ make sure that the following required `python packages <https://github.com/YueZh
    fastdtw
    few
    fftw
+   gwdatafind
    gwpy
    gwsurrogate
    lalsuite
    librosa
+   ligotimegps
    lisaorbits
    numpy
    matplotlib

@@ -4,10 +4,12 @@ esbonio
 fastdtw
 few
 fftw
+gwdatafind
 gwpy
 gwsurrogate
 lalsuite
 librosa
+ligotimegps
 lisaorbits
 numpy
 matplotlib
