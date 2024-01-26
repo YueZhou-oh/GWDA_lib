@@ -97,9 +97,9 @@ Hence, we only give a brief introduction here.
     # source = 'SGWB'
     # source = 'VGB'
 
-:download:`Source code <plot_waveform.py>`, :download:`mbhb.png <mbhb.png>`
+:download:`Source code <plot_waveform.py>`, :download:`mbhb.png <MBHB.png>`
 
-.. image:: mbhb.png
+.. image:: MBHB.png
   :width: 800px
 
 
