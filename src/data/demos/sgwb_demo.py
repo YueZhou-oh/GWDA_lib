@@ -82,7 +82,7 @@ def main():
 
     data = np.vstack([tdiwg.sample_times, dataX, dataY, dataZ])
 
-    with h5py.File("test-SGWB.hdf5", "w") as f:
+    with h5py.File("test_SGWB.hdf5", "w") as f:
         f.create_dataset("TDIdata", data=data)
 
 

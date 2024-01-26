@@ -18,28 +18,28 @@ mount `GWDA <https://github.com/YueZhou-oh/GWDA_lib>`_ as well as your dataset w
 .. code-block:: console
 
    $ docker pull zzhopezhou/astropre:xxxx
-   $ docker run --gpus all -itd -v /path/to/meGWDA_libgatron:/workspace/GWDA_lib -v /path/to/dataset:/workspace/dataset zzhopezhou/astropre:xxxx
+   $ docker run --gpus all -itd -v /path/to/GWDA_lib:/workspace/GWDA_lib -v /path/to/dataset:/workspace/dataset zzhopezhou/astropre:xxxx
 
 In the container, two environments of different python version are provided.
-Specifically, the ``few_env`` environment is mainly used for model training and the ``base`` environment is for data generation.
+Specifically, the ``base`` environment is mainly used for model training and the ``waveform`` environment is for data generation.
 
 .. code-block:: console
 
    (base) root@93b17a314f9d:/workspace# which python
    /opt/conda/bin/python
    (base) root@93b17a314f9d:/workspace# conda activate few_env
-   (few_env) root@93b17a314f9d:/workspace# which python
-   /opt/conda/envs/few_env/bin/python
+   (waveform) root@93b17a314f9d:/workspace# which python
+   /opt/conda/envs/waveform/bin/python
 
 
 If you can't use this for some reason, use the latest pytorch, cuda, nccl, NVIDIA `APEX <https://github.com/NVIDIA/apex#quick-start>`_ and
 make sure that the following required `python packages <https://github.com/YueZhou-oh/GWDA_lib/blob/main/requirements.txt>`_ are successfully installed.
 
-.. code-block:: 
+.. code-block:: console
+   :linenos:
 
    astropy
    deepspeed
-   esbonio
    fastdtw
    few
    fftw
@@ -54,15 +54,16 @@ make sure that the following required `python packages <https://github.com/YueZh
    matplotlib
    pandas
    pillow
-   pybind11
    PyCBC
    scikit-learn
    scipy
    speechbrain
    statsmodels
-   tensorrt
+   torchaudio
    transformers
    
+
+.. _modules:
 
 Modules
 ----------------
