@@ -1,29 +1,24 @@
-import os
-from collections import Counter
+import sys
+sys.path.append("..")
 
+import os
 import hydra
 import numpy as np
 import torch
-import wandb
 from matplotlib import pyplot as plt
 
 # import numpy as np
 from omegaconf import DictConfig, OmegaConf
 from rich import print
 
-# from sklearn.metrics import classification_report, confusion_matrix
-# from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 
 # from torchsummary import summary
 from tqdm import tqdm
 
-from emridetection.data.dataloader import EMRIDatasetTorch, TinyEMRIDataset, NpzDatasetTorch
-
-# from emridetection.data.emridataset import EMRIDataset
-# from emridetection.models.mfcnn.mfcnn import MFDCNNFFT, MFCNNFFT
-from emridetection.models.mfcnn.tcn import TCN
-from emridetection.train.trainer import Trainer
+from DECODE.dataloader import EMRIDatasetTorch, TinyEMRIDataset
+from DECODE.tcn import TCN
+from DECODE.trainer import Trainer
 
 
 @hydra.main(version_base="1.2", config_path="../configs", config_name="tcn")
@@ -39,14 +34,6 @@ def main(config):
     # Data loader
     wfdt_train = EMRIDatasetTorch(wfd, train=False)
     wfdt_test = EMRIDatasetTorch(wfd, train=False)
-    # Npz dataloader
-    # AK
-    npz_data_fn = "/workspace/zhty/EMRI_Detection/emridetection/notebooks/AK_data.npy"
-    # XSPEG
-    # npz_data_fn = "/workspace/zhty/EMRI_Detection/emridetection/notebooks/XSPEG_data.npy"
-
-    # wfdt_train = NpzDatasetTorch(npz_data_fn, train=False)
-    # wfdt_test = NpzDatasetTorch(npz_data_fn, train=False)
 
     train_loader = DataLoader(
         wfdt_train,

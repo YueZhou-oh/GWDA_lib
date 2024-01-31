@@ -1,13 +1,3 @@
-"""
-Utility functions.
-
-This module provides utility functions for usual linear algebra operations on Numpy arrays.
-
-Authors:
-    Jean-Baptiste Bayle <j2b.bayle@gmail.com>
-"""
-
-
 import numpy as np
 
 

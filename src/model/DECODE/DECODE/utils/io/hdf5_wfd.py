@@ -3,8 +3,6 @@ from pathlib import Path
 
 import h5py
 
-from emridetection.utils.logger import MyLogger
-
 # mylogger = MyLogger(__name__)
 
 

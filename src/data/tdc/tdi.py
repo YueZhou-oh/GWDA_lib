@@ -12,7 +12,7 @@ from .utils.constant import Constant
 
 # from .utils.cosmology import Cosmology
 from .utils.log_utils import MyLogger
-from .waveform import AAK, GB, MBHB #, SOBBH
+from .waveform import AAK, GB, MBHB
 
 # -------------------------------------
 # constants
@@ -263,16 +263,3 @@ class TDIWaveformGen(object):
             t0=self.t0,
         )
 
-    # def init_SOBBH(self):
-    #     mylogger.logger.info("Init SOBBH")
-    #     self.sobbh = SOBBH(self.f_min, self.delta_t, self.n_signal)
-    #     self.sobbh_TDI = self.TDI(
-    #         self.sobbh,
-    #         index_lambda=2,
-    #         index_beta=1,
-    #         orbit_file=self.orbit_file,
-    #         is_ecliptic_latitude=True,
-    #         remove_sky_coords=False,
-    #         t0=self.t0,
-    #         tdi_chan="XYZ",
-    #     )

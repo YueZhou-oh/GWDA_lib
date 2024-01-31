@@ -1,23 +1,19 @@
-# import logging
+import sys
+sys.path.append("..")
 import os
 from pathlib import Path
 import hydra
 import numpy as np
 import cupy as xp
 
-# import numpy as np
-# from omegaconf import DictConfig, OmegaConf
 from rich import print
 from scipy.signal import welch
-from emridetection.data.emridataset import EMRIDataset
+from DECODE.emridataset import EMRIDataset
 from emridetection.utils.io.hdf5_wfd import save_waveform
 from emridetection.data.dataloader import TinyEMRIDataset
 from tqdm import tqdm
 
-# from emridetection.utils.logger import MyLogger, Timer
 
-# log = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 def gen_amp_ratio_asd(config, ratios=[0.5, 1]):

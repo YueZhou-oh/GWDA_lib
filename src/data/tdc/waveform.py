@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 from bidict import bidict
 from few.waveform import Pn5AAKWaveform
-# from ldc.waveform.waveform import HpHc
 from pycbc.waveform import get_td_waveform
 
 from .utils.constant import Constant
@@ -277,79 +276,6 @@ class MBHB(object):
         M = M_Chirp * eta ** (-3 / 5)
         return MBHB.m1_m2_from_M_q(M, 1 / q)
 
-
-# class SOBBH(object):
-#     def __init__(self, f_min, dt, n_signal):
-#         self.f_min = f_min
-#         # self.T_buffer = T_buffer
-#         # self.buffer_ind = buffer_ind
-#         self.n_signal = n_signal
-#         self.data = None
-#         # self.delta_f = df
-#         self.delta_t = dt
-#         self.SOBHB = HpHc.type("my-sobhb", "SBBH", "IMRPhenomD")
-
-#     def __call__(self, pSOBBH, beta, lam, T=1, dt=10):
-#         # pSOBBH = self.get_par(idx)
-#         t = np.arange(0.0, pSOBBH["ObservationDuration"], dt)
-#         hp_s, hc_s = self.SOBHB.compute_hphc_td(t, pSOBBH)
-
-#         return hp_s + 1j * hc_s
-
-#     def get_par(self, idx):
-#         """
-#         from LDC code
-#         =====================================================
-#         Gal['ind'] = sub_src[:, 1]
-#         Gal['Redshift'] = sub_src[:, 2]
-#         Gal['Mass1'] = sub_src[:, 4]
-#         Gal['Mass2'] = sub_src[:, 5]
-#         Gal['InitialFrequency'] = sub_src[:, 6]
-#         Gal['EclipticLongitude'] = sub_src[:, 10]
-#         Gal['EclipticLatitude'] = 0.5*np.pi - sub_src[:, 9]
-#         Gal['Inclination'] = sub_src[:, 11]
-#         Gal['Polarization'] = sub_src[:, 12]
-#         Gal['Spin1'] = sub_src[:, 13]
-#         Gal['Spin2'] = sub_src[:, 14]
-#         Gal['AzimuthalAngleOfSpin1'] = np.zeros(N)
-#         Gal['AzimuthalAngleOfSpin2'] = np.zeros(N)
-#         Gal['PolarAngleOfSpin1'] = sub_src[:, 15]
-#         Gal['PolarAngleOfSpin2'] = sub_src[:, 16]
-#         Gal['InitialPhase'] = sub_src[:, 18]
-#         Gal['Approximant'] = 'PhenomD'
-#         ==================================================
-#         For ldc package HpHc waveform generator
-#         """
-#         return dict(
-#             {
-#                 "Mass1": self.para_cat[idx, 4],
-#                 "Spin1": self.para_cat[idx, 13],
-#                 "Mass2": self.para_cat[idx, 5],
-#                 "Spin2": self.para_cat[idx, 14],
-#                 "EclipticLatitude": Constant.PI_2 - self.para_cat[idx, 9],
-#                 "EclipticLongitude": self.para_cat[idx, 10],
-#                 "Inclination": self.para_cat[idx, 11],
-#                 "InitialFrequency": max(self.f_min, self.para_cat[idx, 6]),
-#                 "InitialPhase": self.para_cat[idx, 18],
-#                 "Polarization": self.para_cat[idx, 12],
-#                 "Redshift": self.para_cat[idx, 2],
-#                 "Distance": Cosmology.DL(self.para_cat[idx, 2], w=0)[0],
-#                 "Cadence": self.delta_t,
-#                 "ObservationDuration": self.n_signal * self.delta_t,
-#             }
-#         )
-
-#     @TimerLog(mylogger.logger, "Reading catalog from file")
-#     def read_catalog(self, cat_path):
-#         cat_path = Path(cat_path)
-#         if cat_path.suffix in [".txt", ".dat", ".OUT"]:
-#             par = np.loadtxt(cat_path)
-#         elif cat_path.suffix == ".npy":
-#             par = np.load(cat_path)
-#         else:
-#             raise NotImplementedError
-
-#         self.para_cat = par
 
 
 if __name__ == "__main__":
