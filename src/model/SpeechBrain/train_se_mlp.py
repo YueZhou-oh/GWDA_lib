@@ -25,7 +25,7 @@ from gwdataset_torch import GW_SE_Dataset, WaveformDatasetTorch
 
 # Define training procedure
 class Separation(sb.Brain):
-    def compute_forward(self, mix, targets):
+    def compute_forward(self, mix, targets, stage):
         """Forward computations from the mixture to the separated signals."""
 
         # Unpack lists and put tensors in the right device
