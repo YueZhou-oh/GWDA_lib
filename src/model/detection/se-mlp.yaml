@@ -9,13 +9,13 @@ seed: 1607
 __set_seed: !apply:torch.manual_seed [!ref <seed>]
 
 # cuda device num
-cuda: 1
+cuda: 5
 # Data params
-data_folder: 
-data_hdf5: 
-noise_hdf5: 
+data_folder: '../../../dataset'
+data_hdf5: smbhb_test.hdf5
+noise_hdf5: noise_test.hdf5
 
-experiment_name: gw
+experiment_name: detection_demo
 #----------------------------------------
 
 output_folder: !ref results/<experiment_name>/<seed>
@@ -23,11 +23,11 @@ train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 
 # Experiment params
-auto_mix_prec: False 
+auto_mix_prec: False
 test_only: False
-num_spks: 1 
+num_spks: 1
 progressbar: True
-save_inf_data: False 
+save_inf_data: False
 save_attention_weights: False
 # se loss * alpha + clsf loss * (1 - alpha)
 alpha: 1
@@ -44,8 +44,10 @@ loss_upper_lim: 999999  # this is the upper limit for an acceptable loss
 limit_training_signal_len: False
 # this is the length of sequences if we choose to limit
 # the signal length of training sequences
-training_signal_len: 4000 
-
+training_signal_len: 4000
+dataloader_opts:
+    batch_size: !ref <batch_size>
+    num_workers: 3
 
 # loss thresholding -- this thresholds the training loss
 threshold_byloss: True
@@ -59,9 +61,9 @@ kernel_stride: 8
 
 
 # Specifying the network
-Encoder: !new:speechbrain.nnet.linear.Linear
-    input_shape: [!ref <batch_size>, !ref <training_signal_len>, 1]
-    n_neurons: !ref <N_encoder_out>
+Encoder: !new:speechbrain.lobes.models.dual_path.Encoder
+    kernel_size: !ref <kernel_size>
+    out_channels: !ref <N_encoder_out>
 
 
 SBtfintra: !new:speechbrain.lobes.models.dual_path.SBTransformerBlock
@@ -94,9 +96,12 @@ MaskNet: !new:speechbrain.lobes.models.dual_path.Dual_Path_Model
     linear_layer_after_inter_intra: False
     skip_around_intra: True
 
-Decoder: !new:speechbrain.nnet.linear.Linear
-    input_shape: [!ref <batch_size>, !ref <training_signal_len>, !ref <N_encoder_out>]
-    n_neurons: 1
+Decoder: !new:speechbrain.lobes.models.dual_path.Decoder
+    in_channels: !ref <N_encoder_out>
+    out_channels: 1
+    kernel_size: !ref <kernel_size>
+    stride: !ref <kernel_stride>
+    bias: False
 
 linear_1: !new:speechbrain.nnet.linear.Linear
     input_size: !ref <training_signal_len>
@@ -112,10 +117,8 @@ optimizer: !name:torch.optim.Adam
     lr: !ref <lr>
     weight_decay: 0
 
-loss: !name:speechbrain.nnet.losses.mse_loss
-# loss: !name:speechbrain.nnet.losses.get_si_snr_with_pitwrapper
 
-
+loss: !name:speechbrain.nnet.losses.get_si_snr_with_pitwrapper
 loss2: !name:speechbrain.nnet.losses.bce_loss
 
 lr_scheduler: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau

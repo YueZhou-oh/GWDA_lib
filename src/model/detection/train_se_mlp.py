@@ -4,7 +4,7 @@ import sys
 from matplotlib.pyplot import clabel
 import torch
 import torch.nn.functional as F
-import torchaudio
+# import torchaudio
 import speechbrain as sb
 import speechbrain.nnet.schedulers as schedulers
 from speechbrain.utils.distributed import run_on_main
@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader
 from speechbrain.dataio.dataloader import LoopedLoader
 from gwdataset_torch import GW_SE_Dataset, WaveformDatasetTorch
 
-
+# os.environ["CUDA_VISIBLE_DEVICES"]="7"
 # Define training procedure
 class Separation(sb.Brain):
     def compute_forward(self, mix, targets, stage):

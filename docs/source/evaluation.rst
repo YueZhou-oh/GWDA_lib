@@ -7,15 +7,24 @@ Examples of evaluation method
 Data evaluation
 ---------------
 
+SNR
+^^^^^^
+
 xxx
 
 
 Model evaluation
 ------------------
 
+Loss
+^^^^^^
+
 xxx
 
 Downstream task evaluation
 ----------------------------
+
+ROC
+^^^^^^
 
 xxxx
