@@ -648,7 +648,7 @@ class WaveformDataset(object):
         # waveforms, which is determined from delta_f and f_max.
 
         psd_length = int(self.f_max / delta_f) + 1
-
+        
         if self.event is None:
             psd = pycbc.psd.from_string(self.psd_names[ifo], psd_length,
                                         delta_f, self.f_min_psd)

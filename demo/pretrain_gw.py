@@ -23,6 +23,8 @@ from functools import partial
 import torch
 import torch.nn.functional as F
 
+import sys
+sys.path.append('..')
 from src.model.denoising import get_args
 from src.model.denoising import print_rank_0
 from src.model.denoising import get_timers

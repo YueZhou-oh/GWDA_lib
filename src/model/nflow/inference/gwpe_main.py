@@ -715,15 +715,15 @@ class PosteriorModel(object):
         }    
         # Load strain data for event
         event_strain = {}
-        with h5py.File(Path('./data/events/{}'.format(event)) / 'strain_FD_whitened.hdf5', 'r') as f:
+        with h5py.File(Path('../../../dataset/pe/events/{}'.format(event)) / 'strain_FD_whitened.hdf5', 'r') as f:
             event_strain = {det:f[det][:].astype(np.complex64) for det in event_detectors_dict[event][:2]}
         # Load settings
         WFD = wfg.WaveformDataset(sampling_from=self.wfd.sampling_from)
-        WFD.load_setting('./data/{}_sample_prior_basis'.format(event), sample_extrinsic_only = self.sample_extrinsic_only)
+        WFD.load_setting('../../../dataset/pe/{}_sample_prior_basis'.format(event), sample_extrinsic_only = self.sample_extrinsic_only)
 
         # 覆盖 basis
         WFD.basis = SVDBasis()
-        WFD.basis.load('data/{}_sample_prior_basis/'.format(event))
+        WFD.basis.load('../../../dataset/pe/{}_sample_prior_basis/'.format(event))
         WFD.Nrb = WFD.basis.n
         WFD.basis.truncate(truncate_basis)
         # Set up relative whitening
@@ -770,7 +770,7 @@ class PosteriorModel(object):
         try:
             df = pd.read_csv('../bilby_runs/downsampled_posterior_samples_v1.0.0/{}_downsampled_posterior_samples.dat'.format(event), sep=' ')
         except:
-            df = pd.read_csv('./downsampled_posterior_samples_v1.0.0/{}_downsampled_posterior_samples.dat'.format(event), sep=' ')
+            df = pd.read_csv('../../../dataset/pe/downsampled_posterior_samples_v1.0.0/{}_downsampled_posterior_samples.dat'.format(event), sep=' ')
         bilby_samples = df.dropna()[['mass_1', 'mass_2', 'phase', 'geocent_time','luminosity_distance',
                                         'a_1', 'a_2', 'tilt_1', 'tilt_2', 'phi_12', 'phi_jl',
                                         'theta_jn', 'psi', 'ra', 'dec']].values.astype('float64')
