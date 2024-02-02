@@ -563,11 +563,11 @@ class WaveformDataset(object):
         return bilby_samples    
     def _load_all_posterior(self):
         all_bilby_samples = np.empty((50000*10, 15)) # 10 个 events，无 170817
-        for i, event in enumerate(['GW150914', 'GW151012', 
-                    'GW151226', # 'GW170817’,
-                    'GW170104', 'GW170818', 'GW170823',
-                    'GW170809', 'GW170814', 'GW170729', 
-                    'GW170608',]):
+        for i, event in enumerate(['GW150914']):    #, 'GW151012', 
+                    # 'GW151226', # 'GW170817’,
+                    # 'GW170104', 'GW170818', 'GW170823',
+                    # 'GW170809', 'GW170814', 'GW170729', 
+                    # 'GW170608',]):
             all_bilby_samples[i*50000:(i+1)*50000] = self.load_bilby_samples(event)
         self.bilby_samples = all_bilby_samples
         self.bilby_samples_extrisinc = self.bilby_samples[:,[3,4,12,13,14]]

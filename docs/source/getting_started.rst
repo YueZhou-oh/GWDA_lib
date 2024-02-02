@@ -27,7 +27,7 @@ Specifically, the ``base`` environment is mainly used for model training and the
 
    (base) root@93b17a314f9d:/workspace# which python
    /opt/conda/bin/python
-   (base) root@93b17a314f9d:/workspace# conda activate few_env
+   (base) root@93b17a314f9d:/workspace# conda activate waveform
    (waveform) root@93b17a314f9d:/workspace# which python
    /opt/conda/envs/waveform/bin/python
 
@@ -39,27 +39,37 @@ make sure that the following required `python packages <https://github.com/YueZh
    :linenos:
 
    astropy
+   corner
    deepspeed
+   esbonio
    fastdtw
    few
    fftw
    gwdatafind
    gwpy
    gwsurrogate
+   imbalanced-learn==0.11.0
+   lalsimulation
    lalsuite
    librosa
    ligotimegps
    lisaorbits
+   nflows
    numpy
    matplotlib
    pandas
    pillow
-   PyCBC
+   pybind11
+   PyCBC==2.0
    scikit-learn
    scipy
    speechbrain
    statsmodels
-   torchaudio
+   tensorrt
+   torch
+   torchsummary
+   torchtext
+   torchvision
    transformers
    
 
@@ -68,19 +78,4 @@ make sure that the following required `python packages <https://github.com/YueZh
 Modules
 ----------------
 
-To retrieve a list of random ingredients,
-you can use the ``gwda.get_random_ingredients()`` function:
-
-.. autofunction:: lumache.get_random_ingredients
-
-The ``kind`` parameter should be either ``"meat"``, ``"fish"``,
-or ``"veggies"``. Otherwise, :py:func:`lumache.get_random_ingredients`
-will raise an exception.
-
-.. autoexception:: lumache.InvalidKindError
-
-For example:
-
->>> import gwda
->>> gwda.get_random_ingredients()
-['shells', 'gorgonzola', 'parsley']
+TBA
