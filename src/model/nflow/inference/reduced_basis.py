@@ -2,23 +2,23 @@
 # Copyright (c) 2021 Peng Cheng Laboratory.
 # Licensed under the MIT license.
 
-import scipy
-import numpy as np
-import h5py
 from pathlib import Path
+
+import h5py
+import numpy as np
+import scipy
 from sklearn.utils.extmath import randomized_svd
 from tqdm import tqdm
 
 
 class SVDBasis(object):
-
     def __init__(self):
         self.whitening_dict = {}
         self.standardization_dict = {}
         self.T_matrices = None
         self.T_matrices_deriv = None
 
-    def generate_basis(self, training_data, n, method='random'):
+    def generate_basis(self, training_data, n, method="random"):
         """Generate the SVD basis from training data and store it.
 
         The SVD decomposition takes
@@ -35,7 +35,7 @@ class SVDBasis(object):
                        n=0 keeps all basis elements. (default: {0})
         """
 
-        if method == 'random':
+        if method == "random":
             U, s, Vh = randomized_svd(training_data, n)
 
             self.Vh = Vh.astype(np.complex64)
@@ -43,7 +43,7 @@ class SVDBasis(object):
 
             self.n = n
 
-        elif method == 'scipy':
+        elif method == "scipy":
             # Code below uses scipy's svd tool. Likely slower.
 
             U, s, Vh = scipy.linalg.svd(training_data, full_matrices=False)
@@ -109,20 +109,16 @@ class SVDBasis(object):
             f_grid {array} -- frequencies at which FD waveforms are evaluated
         """
 
-        self.t_grid = np.linspace(t_min, t_max, num=Nt, endpoint=True,
-                                  dtype=np.float32)
+        self.t_grid = np.linspace(t_min, t_max, num=Nt, endpoint=True, dtype=np.float32)
 
-        self.T_matrices = np.empty((Nt, self.n, self.n),
-                                   dtype=np.complex64)
-        self.T_matrices_deriv = np.empty((Nt, self.n, self.n),
-                                         dtype=np.complex64)
+        self.T_matrices = np.empty((Nt, self.n, self.n), dtype=np.complex64)
+        self.T_matrices_deriv = np.empty((Nt, self.n, self.n), dtype=np.complex64)
 
-        print('Building time translation matrices.')
+        print("Building time translation matrices.")
         for i in tqdm(range(Nt)):
-
             # Translation by dt in FD is multiplication by e^{- 2 pi i f dt}
-            T_fd = np.exp(- 2j * np.pi * self.t_grid[i] * f_grid)
-            T_deriv_fd = - 2j * np.pi * f_grid * T_fd
+            T_fd = np.exp(-2j * np.pi * self.t_grid[i] * f_grid)
+            T_deriv_fd = -2j * np.pi * f_grid * T_fd
 
             # Convert to FD, apply t translation, convert to reduced basis
             T_basis = (self.Vh * T_fd) @ self.V
@@ -131,7 +127,7 @@ class SVDBasis(object):
             self.T_matrices[i] = T_basis
             self.T_matrices_deriv[i] = T_deriv_basis
 
-    def time_translate(self, coefficients, dt, interpolation='linear'):
+    def time_translate(self, coefficients, dt, interpolation="linear"):
         """Calculate basis coefficients for a time-translated waveform.
 
         The new waveform h_new(t) = h_old(t - dt). In other words, if the
@@ -154,7 +150,7 @@ class SVDBasis(object):
             array -- basis coefficients of time-translated waveform
         """
 
-        pos = np.searchsorted(self.t_grid, dt, side='right') - 1
+        pos = np.searchsorted(self.t_grid, dt, side="right") - 1
 
         if self.t_grid[pos] == dt:
             # No interpolation needed
@@ -162,7 +158,7 @@ class SVDBasis(object):
 
         else:
             t_left = self.t_grid[pos]
-            t_right = self.t_grid[pos+1]
+            t_right = self.t_grid[pos + 1]
 
             # Interpolation parameter u(dt) defined so that:
             #           u(t_left) = 0
@@ -172,30 +168,25 @@ class SVDBasis(object):
 
             # Require coefficients evaluated on boundaries of interval
             y_left = coefficients @ self.T_matrices[pos]
-            y_right = coefficients @ self.T_matrices[pos+1]
+            y_right = coefficients @ self.T_matrices[pos + 1]
 
-            if interpolation == 'linear':
-
+            if interpolation == "linear":
                 translated = y_left * (1 - u) + y_right * u
 
-            elif interpolation == 'cubic':
-
+            elif interpolation == "cubic":
                 # Also require derivative of coefficients wrt dt
                 dydt_left = coefficients @ self.T_matrices_deriv[pos]
-                dydt_right = coefficients @ self.T_matrices_deriv[pos+1]
+                dydt_right = coefficients @ self.T_matrices_deriv[pos + 1]
 
                 # Cubic interpolation over interval
                 # See https://en.wikipedia.org/wiki/Cubic_Hermite_spline
 
-                h00 = 2*(u**3) - 3*(u**2) + 1
-                h10 = u**3 - 2*(u**2) + u
-                h01 = -2*(u**3) + 3*(u**2)
+                h00 = 2 * (u**3) - 3 * (u**2) + 1
+                h10 = u**3 - 2 * (u**2) + u
+                h01 = -2 * (u**3) + 3 * (u**2)
                 h11 = u**3 - u**2
 
-                translated = (y_left * h00
-                              + dydt_left * h10 * (t_right - t_left)
-                              + y_right * h01
-                              + dydt_right * h11 * (t_right - t_left))
+                translated = y_left * h00 + dydt_left * h10 * (t_right - t_left) + y_right * h01 + dydt_right * h11 * (t_right - t_left)
 
         return translated
 
@@ -211,8 +202,7 @@ class SVDBasis(object):
     # to be modified.
     #
 
-    def init_whitening(self, ref_psd_name, ref_psd,
-                       new_psd_name, new_psd):
+    def init_whitening(self, ref_psd_name, ref_psd, new_psd_name, new_psd):
         """Initialize whitening.
 
         Constructs and saves the whitening matrix for changing from a reference
@@ -226,9 +216,7 @@ class SVDBasis(object):
             new_psd {array} -- frequency series for new PSD
         """
 
-        if ((new_psd_name != ref_psd_name)
-                and (new_psd_name not in self.whitening_dict.keys())):
-
+        if (new_psd_name != ref_psd_name) and (new_psd_name not in self.whitening_dict.keys()):
             # ref_psd = np.array(ref_psd)
             # new_psd = np.array(new_psd)
 
@@ -271,7 +259,6 @@ class SVDBasis(object):
     #
 
     def truncate(self, n):
-
         self.V = self.V[:, :n]
         self.Vh = self.Vh[:n, :]
 
@@ -296,7 +283,6 @@ class SVDBasis(object):
     #
 
     def init_standardization(self, ifo, h_array, noise_std):
-
         # Standard deviation of data. Divide by sqrt(2) because we want real
         # and imaginary parts to have unit standard deviation.
         std = np.std(h_array, axis=0) / np.sqrt(2)
@@ -307,41 +293,35 @@ class SVDBasis(object):
         self.standardization_dict[ifo] = 1.0 / std_total
 
     def standardize(self, h, ifo):
-
         return h * self.standardization_dict[ifo]
 
     #
     # File I/O
     #
 
-    def save(self, directory='.', filename='reduced_basis.hdf5'):
-
+    def save(self, directory=".", filename="reduced_basis.hdf5"):
         p = Path(directory)
         p.mkdir(parents=True, exist_ok=True)
 
-        f = h5py.File(p / filename, 'w')
+        f = h5py.File(p / filename, "w")
 
-        f.create_dataset('V', data=self.V,
-                         compression='gzip', compression_opts=9)
+        f.create_dataset("V", data=self.V, compression="gzip", compression_opts=9)
 
         if self.standardization_dict != {}:
-            std_group = f.create_group('std')
+            std_group = f.create_group("std")
             for ifo, std in self.standardization_dict.items():
-                std_group.create_dataset(ifo, data=std,
-                                         compression='gzip',
-                                         compression_opts=9)
+                std_group.create_dataset(ifo, data=std, compression="gzip", compression_opts=9)
 
         f.close()
 
-    def load(self, directory='.', filename='reduced_basis.hdf5'):
-
+    def load(self, directory=".", filename="reduced_basis.hdf5"):
         p = Path(directory)
 
-        f = h5py.File(p / filename, 'r')
-        self.V = f['V'][:, :]
+        f = h5py.File(p / filename, "r")
+        self.V = f["V"][:, :]
 
-        if 'std' in f.keys():
-            std_group = f['std']
+        if "std" in f.keys():
+            std_group = f["std"]
             for ifo in std_group.keys():
                 self.standardization_dict[ifo] = std_group[ifo][:]
 

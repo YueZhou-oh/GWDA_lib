@@ -277,6 +277,5 @@ class MBHB(object):
         return MBHB.m1_m2_from_M_q(M, 1 / q)
 
 
-
 if __name__ == "__main__":
     pass

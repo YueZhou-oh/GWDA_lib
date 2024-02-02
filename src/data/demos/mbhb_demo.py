@@ -8,7 +8,6 @@ except (ImportError, ModuleNotFoundError) as e:
 
 import h5py
 import numpy as np
-
 from tdc.tdi import TDIWaveformGen
 from tdc.utils.cosmology import Cosmology
 

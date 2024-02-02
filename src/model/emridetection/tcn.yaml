@@ -1,0 +1,36 @@
+dataset:
+  save_path: "dataset/emridetection/"
+  fn: emri_asd_test.hdf5
+dataloader:
+  batch_size: 256
+  num_workers: 8
+  # reduce: 2
+
+training:
+  test_only: True
+  checkpoint_dir: 
+  gpu: 0
+  n_epoch: 50
+  loss_fn: "cross_entropy"
+  optimizer_type: "adam"
+  optimizer_kwargs:
+    lr: 5e-5
+    weight_decay: 1e-3
+  scheduler_type: "plateau"
+  scheduler_kwargs:
+    mode: "min"
+    factor: 0.5
+    patience: 5
+    threshold: 1e-4
+  result_dir: "/workspace/zhty/EMRI_Detection/emridetection/results//${now:%Y-%m-%d}/${now:%H-%M-%S}"
+  # result_dir: "/workspace/zhty/EMRI_Detection/emridetection/results/ori/"
+  result_fn: "inf_result_100_240_1k.npy"
+  use_wandb: False
+
+net:
+  input_channels: 2
+  n_classes: 2
+  n_hidden: 64
+  n_levels: 4
+  kernel_size: 5
+  dropout: 0.1

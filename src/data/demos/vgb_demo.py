@@ -9,10 +9,9 @@ except (ImportError, ModuleNotFoundError):
 from pathlib import Path
 
 import h5py
-from tqdm import tqdm
-
 from tdc.tdi import TDIWaveformGen
 from tdc.utils.log_utils import MyLogger, TimerLog
+from tqdm import tqdm
 
 mylogger = MyLogger(__name__)
 

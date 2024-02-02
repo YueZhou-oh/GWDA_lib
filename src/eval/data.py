@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
 from scipy.stats import shapiro
-from src.data.tdc.utils.constant import Constant
 from statsmodels.tsa.stattools import adfuller
+
+from src.data.tdc.utils.constant import Constant
 
 
 def tukey(M, alpha=0.5):

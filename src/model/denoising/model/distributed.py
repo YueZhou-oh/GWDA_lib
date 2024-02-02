@@ -13,44 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 import torch
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
-from src.model.denoising import get_args
-from src.model.denoising import mpu
+from src.model.denoising import get_args, mpu
+
 from .module import MegatronModule
 
 
-
 class MemoryBuffer:
-
     def __init__(self, numel, dtype):
         self.numel = numel
         self.dtype = dtype
-        self.data = torch.zeros(self.numel,
-                                dtype=self.dtype,
-                                device=torch.cuda.current_device(),
-                                requires_grad=False)
-
+        self.data = torch.zeros(self.numel, dtype=self.dtype, device=torch.cuda.current_device(), requires_grad=False)
 
     def zero(self):
         """Reset the buffer to zero."""
         self.data.zero_()
 
-
     def get(self, shape, start_index):
         """Return a tensor with the input `shape` as a view into the
         1-D data starting at `start_index`."""
         end_index = start_index + shape.numel()
-        assert end_index <= self.numel, \
-            'requested tensor is out of the buffer range.'
+        assert end_index <= self.numel, "requested tensor is out of the buffer range."
         buffer_tensor = self.data[start_index:end_index]
         buffer_tensor = buffer_tensor.view(shape)
         return buffer_tensor
-
 
 
 class DistributedDataParallelBase(MegatronModule, ABC):
@@ -61,29 +51,21 @@ class DistributedDataParallelBase(MegatronModule, ABC):
         # Keep a pointer to the model.
         self.module = module
 
-
     @abstractmethod
     def allreduce_gradients(self):
         pass
 
-
     def forward(self, *inputs, **kwargs):
         return self.module(*inputs, **kwargs)
 
-
-    def state_dict(self, destination=None, prefix='', keep_vars=False):
+    def state_dict(self, destination=None, prefix="", keep_vars=False):
         return self.module.state_dict(destination, prefix, keep_vars)
 
-
-    def state_dict_for_save_checkpoint(self, destination=None, prefix='',
-                                       keep_vars=False):
-        return self.module.state_dict_for_save_checkpoint(destination, prefix,
-                                                          keep_vars)
-
+    def state_dict_for_save_checkpoint(self, destination=None, prefix="", keep_vars=False):
+        return self.module.state_dict_for_save_checkpoint(destination, prefix, keep_vars)
 
     def load_state_dict(self, state_dict, strict=True):
         self.module.load_state_dict(state_dict, strict=strict)
-
 
 
 class DistributedDataParallel(DistributedDataParallelBase):
@@ -102,14 +84,10 @@ class DistributedDataParallel(DistributedDataParallelBase):
             gradients.
     """
 
-    def __init__(self, module,
-                 accumulate_allreduce_grads_in_fp32,
-                 use_contiguous_buffers):
-
+    def __init__(self, module, accumulate_allreduce_grads_in_fp32, use_contiguous_buffers):
         super(DistributedDataParallel, self).__init__(module)
 
-        self.accumulate_allreduce_grads_in_fp32 \
-            = accumulate_allreduce_grads_in_fp32
+        self.accumulate_allreduce_grads_in_fp32 = accumulate_allreduce_grads_in_fp32
         self.use_contiguous_buffers = use_contiguous_buffers
         # If we are using fp32-accumulate-allreduce explicitly
         # this means we need main grads in a continous buffer.
@@ -126,16 +104,14 @@ class DistributedDataParallel(DistributedDataParallelBase):
 
             # Simple function to define buffer type.
             def _get_buffer_type(param):
-                return torch.float if \
-                    self.accumulate_allreduce_grads_in_fp32 else param.dtype
+                return torch.float if self.accumulate_allreduce_grads_in_fp32 else param.dtype
 
             # First calculate total number of elements per type.
             type_num_elements = {}
             for param in self.module.parameters():
                 if param.requires_grad:
                     dtype = _get_buffer_type(param)
-                    type_num_elements[dtype] = type_num_elements.get(dtype, 0) \
-                                               + param.data.nelement()
+                    type_num_elements[dtype] = type_num_elements.get(dtype, 0) + param.data.nelement()
 
             # Allocate the buffer.
             for dtype, num_elements in type_num_elements.items():
@@ -147,8 +123,7 @@ class DistributedDataParallel(DistributedDataParallelBase):
                 if param.requires_grad:
                     dtype = _get_buffer_type(param)
                     type_num_elements[dtype] -= param.data.nelement()
-                    param.main_grad = self._grad_buffers[dtype].get(
-                        param.data.shape, type_num_elements[dtype])
+                    param.main_grad = self._grad_buffers[dtype].get(param.data.shape, type_num_elements[dtype])
 
             # Backward hook.
             # Accumalation function for the gradients. We need
@@ -164,9 +139,9 @@ class DistributedDataParallel(DistributedDataParallelBase):
                     grad_acc.register_hook(self._make_param_hook(param))
                     self.grad_accs.append(grad_acc)
 
-
     def _make_param_hook(self, param):
         """Create the all-reduce hook for backprop."""
+
         # Hook used for back-prop.
         def param_hook(*unused):
             # Add the gradient to the buffer.
@@ -174,16 +149,15 @@ class DistributedDataParallel(DistributedDataParallelBase):
                 param.main_grad.add_(param.grad.data)
                 # Now we can deallocate grad memory.
                 param.grad = None
-        return param_hook
 
+        return param_hook
 
     def zero_grad_buffer(self):
         """Set the grad buffer data to zero. Needs to be called at the
         begining of each iteration."""
-        assert self._grad_buffers is not None, 'buffers are not initialized.'
+        assert self._grad_buffers is not None, "buffers are not initialized."
         for _, buffer_ in self._grad_buffers.items():
             buffer_.zero()
-
 
     def allreduce_gradients(self):
         """Reduce gradients across data parallel ranks."""
@@ -191,8 +165,7 @@ class DistributedDataParallel(DistributedDataParallelBase):
         if self._grad_buffers is not None:
             for _, buffer_ in self._grad_buffers.items():
                 buffer_.data /= mpu.get_data_parallel_world_size()
-                torch.distributed.all_reduce(
-                    buffer_.data, group=mpu.get_data_parallel_group())
+                torch.distributed.all_reduce(buffer_.data, group=mpu.get_data_parallel_group())
         else:
             # Otherwise, bucketize and all-reduce
             buckets = {}
@@ -211,8 +184,6 @@ class DistributedDataParallel(DistributedDataParallelBase):
                 grads = [param.grad.data for param in bucket]
                 coalesced = _flatten_dense_tensors(grads)
                 coalesced /= mpu.get_data_parallel_world_size()
-                torch.distributed.all_reduce(
-                    coalesced, group=mpu.get_data_parallel_group())
-                for buf, synced in zip(grads, _unflatten_dense_tensors(
-                        coalesced, grads)):
+                torch.distributed.all_reduce(coalesced, group=mpu.get_data_parallel_group())
+                for buf, synced in zip(grads, _unflatten_dense_tensors(coalesced, grads)):
                     buf.copy_(synced)

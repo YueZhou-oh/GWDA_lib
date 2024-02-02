@@ -13,10 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fused_layer_norm import MixedFusedLayerNorm as LayerNorm
-
 from .distributed import DistributedDataParallel
-from .waveformer_model import WaveFormerModel
-
-from .waveform_model import get_waveform_model
+from .fused_layer_norm import MixedFusedLayerNorm as LayerNorm
 from .module import Float16Module
+from .waveform_model import get_waveform_model
+from .waveformer_model import WaveFormerModel

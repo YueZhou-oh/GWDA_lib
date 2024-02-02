@@ -3,35 +3,29 @@
 # Licensed under the MIT license.
 
 
+import functools
+import json
+from pathlib import Path
+
+import h5py
+import numpy as np
+import pandas as pd
+import pycbc.psd
+import torch
+from imblearn.combine import SMOTETomek  # pip install imblearn
+from lal import C_SI, MSUN_SI, PC_SI, REARTH_SI
+from lalsimulation import GetApproximantFromString, SimInspiralChooseFDWaveform, SimInspiralFD, SimInspiralImplementedFDApproximants, SimInspiralTransformPrecessingNewInitialConditions
+from pycbc.detector import Detector
+from pycbc.types.frequencyseries import FrequencySeries
+from pycbc.waveform import get_fd_waveform, get_td_waveform, get_waveform_filter_length_in_time
+from torch.utils.data import Dataset
+from tqdm import tqdm
+
 # from pprint import pprint as print
 from .reduced_basis import SVDBasis
 
-import h5py
-from imblearn.combine import SMOTETomek # pip install imblearn
-import pandas as pd
-import numpy as np
-from pathlib import Path
-import json
-import functools
-from tqdm import tqdm
-
-from pycbc.waveform import (get_td_waveform, get_fd_waveform,
-                            get_waveform_filter_length_in_time)
-from pycbc.types.frequencyseries import FrequencySeries
-import pycbc.psd
 # from pycbc.waveform.utils import fd_taper
 
-from pycbc.detector import Detector
-
-from lalsimulation import (SimInspiralTransformPrecessingNewInitialConditions,
-                           SimInspiralChooseFDWaveform,
-                           SimInspiralFD,
-                           SimInspiralImplementedFDApproximants,
-                           GetApproximantFromString)
-from lal import MSUN_SI, REARTH_SI, C_SI, PC_SI
-
-import torch
-from torch.utils.data import Dataset
 
 # from .bayeswave_prior import inverse_cdf as bw_inverse_cdf
 # from .bayeswave_prior import pdf as bw_pdf
@@ -43,16 +37,13 @@ from torch.utils.data import Dataset
 TIME_TRANSLATION_PTS = 1001
 
 
-def source_frame_to_radiation(theta_jn, phi_jl, tilt_1, tilt_2, phi_12,
-                              a_1, a_2, mass_1, mass_2, f_ref, phase):
-
+def source_frame_to_radiation(theta_jn, phi_jl, tilt_1, tilt_2, phi_12, a_1, a_2, mass_1, mass_2, f_ref, phase):
     mass_1_SI = mass_1 * MSUN_SI
     mass_2_SI = mass_2 * MSUN_SI
 
     # Following bilby code
 
-    if ((a_1 == 0.0 or tilt_1 in [0, np.pi])
-            and (a_2 == 0.0 or tilt_2 in [0, np.pi])):
+    if (a_1 == 0.0 or tilt_1 in [0, np.pi]) and (a_2 == 0.0 or tilt_2 in [0, np.pi]):
         spin_1x = 0.0
         spin_1y = 0.0
         spin_1z = a_1 * np.cos(tilt_1)
@@ -61,12 +52,7 @@ def source_frame_to_radiation(theta_jn, phi_jl, tilt_1, tilt_2, phi_12,
         spin_2z = a_2 * np.cos(tilt_2)
         iota = theta_jn
     else:
-        iota, spin_1x, spin_1y, spin_1z, spin_2x, spin_2y, spin_2z = (
-            SimInspiralTransformPrecessingNewInitialConditions(
-                theta_jn, phi_jl, tilt_1, tilt_2, phi_12,
-                a_1, a_2, mass_1_SI, mass_2_SI, f_ref, phase
-            )
-        )
+        iota, spin_1x, spin_1y, spin_1z, spin_2x, spin_2y, spin_2z = SimInspiralTransformPrecessingNewInitialConditions(theta_jn, phi_jl, tilt_1, tilt_2, phi_12, a_1, a_2, mass_1_SI, mass_2_SI, f_ref, phase)
     return iota, spin_1x, spin_1y, spin_1z, spin_2x, spin_2y, spin_2z
 
 
@@ -101,7 +87,6 @@ def m1_m2_from_M_q(M, q):
 
 
 def M_q_from_m1_m2(m1, m2):
-
     M = m1 + m2
     q = m2 / m1
 
@@ -109,93 +94,91 @@ def M_q_from_m1_m2(m1, m2):
 
 
 class WaveformDataset(object):
-    """Contains a database of waveforms from which to train a model.
-    """
+    """Contains a database of waveforms from which to train a model."""
 
-    def __init__(self, spins=True, inclination=True, spins_aligned=True,
-                 detectors=['H1', 'L1', 'V1'], domain='TD',
-                 extrinsic_at_train=False, sampling_from=None):
-
+    def __init__(self, spins=True, inclination=True, spins_aligned=True, detectors=["H1", "L1", "V1"], domain="TD", extrinsic_at_train=False, sampling_from=None):
         # Set up indices for parameters
         param_idx = dict(mass_1=0, mass_2=1, phase=2, time=3, distance=4)
         nparams = 5
         if spins:
             if spins_aligned:
-                param_idx['chi_1'] = nparams
-                param_idx['chi_2'] = nparams + 1
+                param_idx["chi_1"] = nparams
+                param_idx["chi_2"] = nparams + 1
                 nparams += 2
             else:
                 if inclination is not True:
                     raise Exception("Precession requires nonzero inclination.")
-                param_idx['a_1'] = nparams
-                param_idx['a_2'] = nparams + 1
-                param_idx['tilt_1'] = nparams + 2
-                param_idx['tilt_2'] = nparams + 3
-                param_idx['phi_12'] = nparams + 4
-                param_idx['phi_jl'] = nparams + 5
+                param_idx["a_1"] = nparams
+                param_idx["a_2"] = nparams + 1
+                param_idx["tilt_1"] = nparams + 2
+                param_idx["tilt_2"] = nparams + 3
+                param_idx["phi_12"] = nparams + 4
+                param_idx["phi_jl"] = nparams + 5
                 nparams += 6
         if inclination:
-            param_idx['theta_jn'] = nparams
-            param_idx['psi'] = nparams + 1
+            param_idx["theta_jn"] = nparams
+            param_idx["psi"] = nparams + 1
             nparams += 2
-        param_idx['ra'] = nparams
-        param_idx['dec'] = nparams + 1
+        param_idx["ra"] = nparams
+        param_idx["dec"] = nparams + 1
         nparams += 2
         self.param_idx = param_idx
         self.nparams = nparams
         self.sampling_from = sampling_from
         # Default prior ranges
-        self.prior = dict(mass_1=[10.0, 80.0],  # solar masses
-                          mass_2=[10.0, 80.0],
-                          # M=[25.0, 100.0],
-                          # q=[0.125, 1.0],
-                          phase=[0.0, 2*np.pi],
-                          time=[-0.1, 0.1],  # seconds
-                          distance=[100.0, 4000.0],  # Mpc
-                          chi_1=[-1.0, 1.0],
-                          chi_2=[-1.0, 1.0],
-                          a_1=[0.0, 0.99],
-                          a_2=[0.0, 0.99],
-                          tilt_1=[0.0, np.pi],
-                          tilt_2=[0.0, np.pi],
-                          phi_12=[0.0, 2*np.pi],
-                          phi_jl=[0.0, 2*np.pi],
-                          theta_jn=[0.0, np.pi],
-                          psi=[0.0, np.pi],
-                          ra=[0.0, 2*np.pi],
-                          dec=[-np.pi/2.0, np.pi/2.0])
+        self.prior = dict(
+            mass_1=[10.0, 80.0],  # solar masses
+            mass_2=[10.0, 80.0],
+            # M=[25.0, 100.0],
+            # q=[0.125, 1.0],
+            phase=[0.0, 2 * np.pi],
+            time=[-0.1, 0.1],  # seconds
+            distance=[100.0, 4000.0],  # Mpc
+            chi_1=[-1.0, 1.0],
+            chi_2=[-1.0, 1.0],
+            a_1=[0.0, 0.99],
+            a_2=[0.0, 0.99],
+            tilt_1=[0.0, np.pi],
+            tilt_2=[0.0, np.pi],
+            phi_12=[0.0, 2 * np.pi],
+            phi_jl=[0.0, 2 * np.pi],
+            theta_jn=[0.0, np.pi],
+            psi=[0.0, np.pi],
+            ra=[0.0, 2 * np.pi],
+            dec=[-np.pi / 2.0, np.pi / 2.0],
+        )
         # self.set_m1_m2_ranges_from_M_q_ranges()
 
         # Whether to apply extrinsic parameters at train time or at dataset
         # preparation time.
         self.extrinsic_at_train = extrinsic_at_train
-        self.extrinsic_params = ['time', 'distance',
-                                 'psi', 'ra', 'dec']
+        self.extrinsic_params = ["time", "distance", "psi", "ra", "dec"]
 
         # Fiducial values for extrinsic parameters
         #
         # Note that the extrinsic parameters psi, ra, dec are simply ignored if
         # extrinsic_at_train is true. They don't need fiducial values.
-        self.fiducial_params = dict(time=0.0,
-                                    distance=1000.0)
+        self.fiducial_params = dict(time=0.0, distance=1000.0)
 
-        self.parameters_latex_dict = dict(mass_1=r'$m_1$',
-                                          mass_2=r'$m_2$',
-                                          phase=r'$\phi_c$',
-                                          time=r'$t_c$',
-                                          distance=r'$d_L$',
-                                          chi_1=r'$\chi_1$',
-                                          chi_2=r'$\chi_2$',
-                                          a_1=r'$a_1$',
-                                          a_2=r'$a_2$',
-                                          tilt_1=r'$t_1$',
-                                          tilt_2=r'$t_2$',
-                                          phi_12=r'$\phi_{12}$',
-                                          phi_jl=r'$\phi_{jl}$',
-                                          theta_jn=r'$\theta_{JN}$',
-                                          psi=r'$\psi$',
-                                          ra=r'$\alpha$',
-                                          dec=r'$\delta$')
+        self.parameters_latex_dict = dict(
+            mass_1=r"$m_1$",
+            mass_2=r"$m_2$",
+            phase=r"$\phi_c$",
+            time=r"$t_c$",
+            distance=r"$d_L$",
+            chi_1=r"$\chi_1$",
+            chi_2=r"$\chi_2$",
+            a_1=r"$a_1$",
+            a_2=r"$a_2$",
+            tilt_1=r"$t_1$",
+            tilt_2=r"$t_2$",
+            phi_12=r"$\phi_{12}$",
+            phi_jl=r"$\phi_{jl}$",
+            theta_jn=r"$\theta_{JN}$",
+            psi=r"$\psi$",
+            ra=r"$\alpha$",
+            dec=r"$\delta$",
+        )
 
         self.spins = spins
         self.spins_aligned = spins_aligned
@@ -209,29 +192,23 @@ class WaveformDataset(object):
         self.f_min = 8.0  # Hertz
         self.sampling_rate = 2048.0
         self.time_duration = 4.0  # seconds
-        self.approximant = 'IMRPhenomPv2'
+        self.approximant = "IMRPhenomPv2"
         self.ref_time = 100000000
 
         self.f_min_psd = 20.0  # Make sure this is smaller than f_min?
-        self.psd_names = dict(H1='aLIGODesignSensitivityP1200087',
-                              L1='aLIGODesignSensitivityP1200087',
-                              V1='AdVDesignSensitivityP1200087',
-                              ref='aLIGODesignSensitivityP1200087')
-        self.psd = dict(H1={},
-                        L1={},
-                        V1={},
-                        ref={})
+        self.psd_names = dict(H1="aLIGODesignSensitivityP1200087", L1="aLIGODesignSensitivityP1200087", V1="AdVDesignSensitivityP1200087", ref="aLIGODesignSensitivityP1200087")
+        self.psd = dict(H1={}, L1={}, V1={}, ref={})
 
         # Note that much of the code depends on detectory ordering in the
         # dictionary. Do not change the ordering. As of Python 3.7 dictionaries
         # are ordered.
 
-        if domain in ('FD', 'RB'):
+        if domain in ("FD", "RB"):
             self.f_min = 20.0
         self.domain = domain
 
         # Number of reduced basis elements
-        if domain == 'RB':
+        if domain == "RB":
             self.Nrb = 200
 
         # Initialize arrays
@@ -291,33 +268,27 @@ class WaveformDataset(object):
 
     @property
     def context_dim(self):
-        if self.domain == 'TD':
+        if self.domain == "TD":
             return self.Nt * len(self.detectors)
-        elif self.domain == 'FD':
-            return ((int((self.f_max - self.f_min) / self.delta_f) + 1)
-                    * len(self.detectors) * 2)
-        elif self.domain == 'RB':
+        elif self.domain == "FD":
+            return (int((self.f_max - self.f_min) / self.delta_f) + 1) * len(self.detectors) * 2
+        elif self.domain == "RB":
             return self.Nrb * len(self.detectors) * 2
 
     @property
     def sample_times(self):
         """Array of times at which waveforms are sampled."""
-        return np.linspace(0.0, self.time_duration,
-                           num=self.Nt,
-                           endpoint=False,
-                           dtype=np.float32)
+        return np.linspace(0.0, self.time_duration, num=self.Nt, endpoint=False, dtype=np.float32)
 
     @property
     @functools.lru_cache()
     def sample_frequencies(self):
-        return np.linspace(0.0, self.f_max,
-                           num=self.Nf, endpoint=True,
-                           dtype=np.float32)
+        return np.linspace(0.0, self.f_max, num=self.Nf, endpoint=True, dtype=np.float32)
 
     @property
     @functools.lru_cache()
     def frequency_mask(self):
-        return (self.sample_frequencies >= self.f_min)
+        return self.sample_frequencies >= self.f_min
 
     @property
     def _noise_std(self):
@@ -331,10 +302,10 @@ class WaveformDataset(object):
         noise would at each point go to infinity, hence the delta_t factor.
 
         """
-        if self.domain == 'TD':
+        if self.domain == "TD":
             return 1.0 / np.sqrt(2.0 * self.delta_t)
 
-        elif self.domain in ('FD', 'RB'):
+        elif self.domain in ("FD", "RB"):
             return np.sqrt(self.window_factor) / np.sqrt(4.0 * self.delta_f)
 
     @property
@@ -370,7 +341,7 @@ class WaveformDataset(object):
             n {int} -- number of waveforms (default: {10000})
         """
 
-        if self.domain == 'RB' and self.basis is None:
+        if self.domain == "RB" and self.basis is None:
             self.generate_reduced_basis()
 
         print("Sampling {} sets of parameters from prior.".format(n))
@@ -381,24 +352,23 @@ class WaveformDataset(object):
             # Calculate h_+ and h_x, for reference PSD.
             # Only set up for FD or RB waveforms.
 
-            if self.domain == 'TD':
-                raise NotImplementedError('Cannot apply extrinsic '
-                                          'parameters at train time in TD.')
+            if self.domain == "TD":
+                raise NotImplementedError("Cannot apply extrinsic " "parameters at train time in TD.")
 
             # Set extrinsic parameters to fiducial values.
             print("Setting extrinsic parameters to fiducial values.")
             for extrinsic_param, value in self.fiducial_params.items():
                 self.parameters[:, self.param_idx[extrinsic_param]] = value
 
-            print('Splitting parameters into training and test sets.')
+            print("Splitting parameters into training and test sets.")
             self.init_training()
 
             # Set up relative whitening
             self.init_relative_whitening()
 
-            if self.domain == 'FD':
+            if self.domain == "FD":
                 wf_length = self.Nf
-            elif self.domain == 'RB':
+            elif self.domain == "RB":
                 wf_length = self.Nrb
 
             # Allocate storage
@@ -406,20 +376,18 @@ class WaveformDataset(object):
             self.hc = np.empty([n, wf_length], dtype=np.complex64)
 
             # Generate waveforms
-            print('Generating + and x waveforms.')
+            print("Generating + and x waveforms.")
             # hp_FD = np.empty(self.Nf, dtype=np.complex64)
             # hc_FD = np.empty(self.Nf, dtype=np.complex64)
             for i in tqdm(range(n)):
                 p = self.parameters[i]
 
                 # FD waveforms
-                hp, hc = self._generate_whitened_waveform(
-                    p, intrinsic_only=True
-                )
+                hp, hc = self._generate_whitened_waveform(p, intrinsic_only=True)
                 hp = hp.astype(np.complex64)
                 hc = hc.astype(np.complex64)
 
-                if self.domain == 'RB':
+                if self.domain == "RB":
                     # Convert FD to RB waveforms
                     hp = self.basis.fseries_to_basis_coefficients(hp)
                     hc = self.basis.fseries_to_basis_coefficients(hc)
@@ -430,27 +398,24 @@ class WaveformDataset(object):
 
             # Additional initialization. Sets up whitening and time
             # translations.
-            print('Performing additional dataset initialization.')
-            if self.domain == 'FD':
+            print("Performing additional dataset initialization.")
+            if self.domain == "FD":
                 self.init_relative_whitening()
-            elif self.domain == 'RB':
+            elif self.domain == "RB":
                 self.initialize_reduced_basis_aux()
 
         else:
             # Calculate detector waveforms.
             # Only set up for TD or FD waveforms.
 
-            if self.domain == 'RB':
-                raise Exception('Not implemented. RB domain only works'
-                                ' with train time extrinsic parameters.')
+            if self.domain == "RB":
+                raise Exception("Not implemented. RB domain only works" " with train time extrinsic parameters.")
 
             for ifo in self.detectors.keys():
-                if self.domain == 'TD':
-                    self.h_detector[ifo] = np.empty(
-                        [n, self.Nt], dtype=np.float32)
-                elif self.domain == 'FD':
-                    self.h_detector[ifo] = np.empty(
-                        [n, self.Nf], dtype=np.complex64)
+                if self.domain == "TD":
+                    self.h_detector[ifo] = np.empty([n, self.Nt], dtype=np.float32)
+                elif self.domain == "FD":
+                    self.h_detector[ifo] = np.empty([n, self.Nf], dtype=np.complex64)
 
             for i, p in enumerate(self.parameters):
                 h = self._generate_whitened_waveform(p)
@@ -463,17 +428,16 @@ class WaveformDataset(object):
         self.parameters = self.parameters.astype(np.float32)
 
     def set_m1_m2_ranges_from_M_q_ranges(self):
-
-        M_min, M_max = self.prior['M']
-        q_min, q_max = self.prior['q']
+        M_min, M_max = self.prior["M"]
+        q_min, q_max = self.prior["q"]
 
         m1_min, _ = m1_m2_from_M_q(M_min, q_max)
         _, m2_min = m1_m2_from_M_q(M_min, q_min)
         m1_max, _ = m1_m2_from_M_q(M_max, q_min)
         _, m2_max = m1_m2_from_M_q(M_max, q_max)
 
-        self.prior['mass_1'] = [m1_min, m1_max]
-        self.prior['mass_2'] = [m2_min, m2_max]
+        self.prior["mass_1"] = [m1_min, m1_max]
+        self.prior["mass_2"] = [m2_min, m2_max]
 
     def _sample_prior(self, n):
         """Obtain samples from the prior distribution.
@@ -494,38 +458,35 @@ class WaveformDataset(object):
             uniform_prior[idx] = self.prior[param]
 
             # Fix up parameters that are not already uniformly sampled
-            if param in ('theta_jn', 'tilt_1', 'tilt_2'):
+            if param in ("theta_jn", "tilt_1", "tilt_2"):
                 uniform_prior[idx] = np.cos(uniform_prior[idx])
-            elif param == 'dec':
+            elif param == "dec":
                 uniform_prior[idx] = np.sin(uniform_prior[idx])
-            elif param == 'distance':
+            elif param == "distance":
                 uniform_prior[idx] = uniform_prior[idx] ** 3.0
 
         # Draw uniform samples
         draw = np.random.random((n, self.nparams))
-        samples = np.apply_along_axis(lambda x: x*(uniform_prior[:, 1]
-                                                   - uniform_prior[:, 0])
-                                      + uniform_prior[:, 0], 1, draw)
+        samples = np.apply_along_axis(lambda x: x * (uniform_prior[:, 1] - uniform_prior[:, 0]) + uniform_prior[:, 0], 1, draw)
 
         # If we have prior bounds on total mass and mass ratio, ensure that the
         # individual masses are such that these bounds are respected.
         #
         # Also apply m1 >= m2 convention
 
-        m1i = self.param_idx['mass_1']
-        m2i = self.param_idx['mass_2']
+        m1i = self.param_idx["mass_1"]
+        m2i = self.param_idx["mass_2"]
 
-        if ('M' in self.prior.keys()) and ('q' in self.prior.keys()):
-            M_min, M_max = self.prior['M']
-            q_min, q_max = self.prior['q']
-            m1_min, m1_max = self.prior['mass_1']
-            m2_min, m2_max = self.prior['mass_2']
+        if ("M" in self.prior.keys()) and ("q" in self.prior.keys()):
+            M_min, M_max = self.prior["M"]
+            q_min, q_max = self.prior["q"]
+            m1_min, m1_max = self.prior["mass_1"]
+            m2_min, m2_max = self.prior["mass_2"]
             for i in range(n):
                 m1, m2 = samples[i, [m1i, m2i]]
                 while True:
                     M, q = M_q_from_m1_m2(m1, m2)
-                    if (m1 >= m2 and M >= M_min and M <= M_max
-                            and q >= q_min and q <= q_max):
+                    if m1 >= m2 and M >= M_min and M <= M_max and q >= q_min and q <= q_max:
                         samples[i, [m1i, m2i]] = (m1, m2)
                         break
                     else:
@@ -537,12 +498,12 @@ class WaveformDataset(object):
 
         # Undo uniformity transformations
         for param, idx in self.param_idx.items():
-            if param in ('theta_jn', 'tilt_1', 'tilt_2'):
+            if param in ("theta_jn", "tilt_1", "tilt_2"):
                 samples[:, idx] = np.arccos(samples[:, idx])
-            elif param == 'dec':
+            elif param == "dec":
                 samples[:, idx] = np.arcsin(samples[:, idx])
-            elif param == 'distance':
-                samples[:, idx] = samples[:, idx] ** (1.0/3.0)
+            elif param == "distance":
+                samples[:, idx] = samples[:, idx] ** (1.0 / 3.0)
 
         return samples
 
@@ -552,31 +513,30 @@ class WaveformDataset(object):
     def load_bilby_samples(self, event):
         # Load bilby samples
         try:
-            df = pd.read_csv('../bilby_runs/downsampled_posterior_samples_v1.0.0/{}_downsampled_posterior_samples.dat'.format(event), sep=' ')
+            df = pd.read_csv("../bilby_runs/downsampled_posterior_samples_v1.0.0/{}_downsampled_posterior_samples.dat".format(event), sep=" ")
         except:
-            df = pd.read_csv('./downsampled_posterior_samples_v1.0.0/{}_downsampled_posterior_samples.dat'.format(event), sep=' ')
-        bilby_samples = df.dropna()[['mass_1', 'mass_2', 'phase', 'geocent_time', 'luminosity_distance',
-                              'a_1', 'a_2', 'tilt_1', 'tilt_2', 'phi_12', 'phi_jl',
-                              'theta_jn', 'psi', 'ra', 'dec']].values.astype('float64')
+            df = pd.read_csv("./downsampled_posterior_samples_v1.0.0/{}_downsampled_posterior_samples.dat".format(event), sep=" ")
+        bilby_samples = df.dropna()[["mass_1", "mass_2", "phase", "geocent_time", "luminosity_distance", "a_1", "a_2", "tilt_1", "tilt_2", "phi_12", "phi_jl", "theta_jn", "psi", "ra", "dec"]].values.astype("float64")
         # Shift the time of coalescence by the trigger time
-        bilby_samples[:,3] = bilby_samples[:,3] - self.ref_time
-        return bilby_samples    
+        bilby_samples[:, 3] = bilby_samples[:, 3] - self.ref_time
+        return bilby_samples
+
     def _load_all_posterior(self):
-        all_bilby_samples = np.empty((50000*10, 15)) # 10 个 events，无 170817
-        for i, event in enumerate(['GW150914']):    #, 'GW151012', 
-                    # 'GW151226', # 'GW170817’,
-                    # 'GW170104', 'GW170818', 'GW170823',
-                    # 'GW170809', 'GW170814', 'GW170729', 
-                    # 'GW170608',]):
-            all_bilby_samples[i*50000:(i+1)*50000] = self.load_bilby_samples(event)
+        all_bilby_samples = np.empty((50000 * 10, 15))  # 10 个 events，无 170817
+        for i, event in enumerate(["GW150914"]):  # , 'GW151012',
+            # 'GW151226', # 'GW170817’,
+            # 'GW170104', 'GW170818', 'GW170823',
+            # 'GW170809', 'GW170814', 'GW170729',
+            # 'GW170608',]):
+            all_bilby_samples[i * 50000 : (i + 1) * 50000] = self.load_bilby_samples(event)
         self.bilby_samples = all_bilby_samples
-        self.bilby_samples_extrisinc = self.bilby_samples[:,[3,4,12,13,14]]
+        self.bilby_samples_extrisinc = self.bilby_samples[:, [3, 4, 12, 13, 14]]
 
     def _load_posterior(self, event):
-        print('sample_extrinsic_only:', self.sample_extrinsic_only)
+        print("sample_extrinsic_only:", self.sample_extrinsic_only)
         self.bilby_samples = self.load_bilby_samples(event)
         # if self.sample_extrinsic_only:
-        self.bilby_samples_extrisinc = self.bilby_samples[:,[3,4,12,13,14]]
+        self.bilby_samples_extrisinc = self.bilby_samples[:, [3, 4, 12, 13, 14]]
 
     def _sample_prior_posterior(self, n):
         """Obtain samples from the target posterior distribution.
@@ -590,17 +550,21 @@ class WaveformDataset(object):
         # if not self.sample_extrinsic_only:
         return self.oversampling(self.bilby_samples, threshold=n)[:n]
         # elif self.sample_extrinsic_only:
-            # return self.oversampling(self.bilby_samples_extrisinc, threshold=n)[:n]
+        # return self.oversampling(self.bilby_samples_extrisinc, threshold=n)[:n]
 
     @staticmethod
     def oversampling(x: np.array, threshold=512, random_state=0):
-        num = len(x)//4
+        num = len(x) // 4
         cache = []
         while True:
-            Input = pd.DataFrame(x).sample(2*num).values
-            fitfor = Input, [1,]*(num)+[0,]*(num)
+            Input = pd.DataFrame(x).sample(2 * num).values
+            fitfor = Input, [
+                1,
+            ] * (num) + [
+                0,
+            ] * (num)
             smote_tomek = SMOTETomek(random_state=random_state)
-            Output_tomek, _ = smote_tomek.fit_resample(*fitfor)            
+            Output_tomek, _ = smote_tomek.fit_resample(*fitfor)
             cache.append(pd.concat([pd.DataFrame(Input), pd.DataFrame(Output_tomek)]).drop_duplicates(keep=False).values)
             if len(np.concatenate(cache)) > threshold:
                 break
@@ -611,7 +575,7 @@ class WaveformDataset(object):
         order to standardize later.
         (Do not use analytic expressions )
         """
-        #parameters_train = self.parameters[self.train_selection]
+        # parameters_train = self.parameters[self.train_selection]
         self.parameters_mean = np.mean(self.parameters, axis=0).astype(np.float32)
         self.parameters_std = np.std(self.parameters, axis=0).astype(np.float32)
 
@@ -619,7 +583,7 @@ class WaveformDataset(object):
         self.ncache_parameters = nsample
         self.cache_parameters = self.oversampling(self.bilby_samples, threshold=len(self.parameters))
         self.cache_parameters_extrinsic = self.oversampling(self.bilby_samples_extrisinc, threshold=nsample)[:nsample]
-    
+
     def sample_prior_extrinsic_posterior(self, n):
         """Draw samples of extrinsic parameters from the posterior prior.
 
@@ -631,7 +595,7 @@ class WaveformDataset(object):
                      parameters
         """
         assert n == 1
-        return self.cache_parameters_extrinsic[np.random.randint(self.ncache_parameters)][np.newaxis,...].astype(np.float32)
+        return self.cache_parameters_extrinsic[np.random.randint(self.ncache_parameters)][np.newaxis, ...].astype(np.float32)
 
     def _generate_psd(self, delta_f, ifo):
         """Generate a PSD. This depends on the detector chosen.
@@ -648,15 +612,11 @@ class WaveformDataset(object):
         # waveforms, which is determined from delta_f and f_max.
 
         psd_length = int(self.f_max / delta_f) + 1
-        
+
         if self.event is None:
-            psd = pycbc.psd.from_string(self.psd_names[ifo], psd_length,
-                                        delta_f, self.f_min_psd)
+            psd = pycbc.psd.from_string(self.psd_names[ifo], psd_length, delta_f, self.f_min_psd)
         else:
-            psd = pycbc.psd.from_txt(self.event_dir
-                                     / (self.psd_names[ifo] + '.txt'),
-                                     psd_length, delta_f, self.f_min_psd,
-                                     is_asd_file=False)
+            psd = pycbc.psd.from_txt(self.event_dir / (self.psd_names[ifo] + ".txt"), psd_length, delta_f, self.f_min_psd, is_asd_file=False)
 
         # To avoid division by 0 when whitening, set the PSD values
         # below f_min and for f_max to the boundary values.
@@ -680,7 +640,7 @@ class WaveformDataset(object):
             psd -- generated PSD
         """
 
-        key = int(1.0/delta_f)
+        key = int(1.0 / delta_f)
 
         if key not in self.psd[ifo]:
             self.psd[ifo][key] = self._generate_psd(delta_f, ifo)
@@ -690,20 +650,20 @@ class WaveformDataset(object):
     def _generate_whitened_waveform(self, p, intrinsic_only=False):
         """Return a whitened TD waveform generated with parameters p."""
 
-        mass_1 = p[self.param_idx['mass_1']]
-        mass_2 = p[self.param_idx['mass_2']]
-        phase = p[self.param_idx['phase']]
-        time = p[self.param_idx['time']]
-        distance = p[self.param_idx['distance']]
-        ra = p[self.param_idx['ra']]
-        dec = p[self.param_idx['dec']]
+        mass_1 = p[self.param_idx["mass_1"]]
+        mass_2 = p[self.param_idx["mass_2"]]
+        phase = p[self.param_idx["phase"]]
+        time = p[self.param_idx["time"]]
+        distance = p[self.param_idx["distance"]]
+        ra = p[self.param_idx["ra"]]
+        dec = p[self.param_idx["dec"]]
 
         # Convert from source frame to Cartesian parameters
         # Optional parameters have default values
 
         if self.inclination:
-            theta_jn = p[self.param_idx['theta_jn']]
-            psi = p[self.param_idx['psi']]
+            theta_jn = p[self.param_idx["theta_jn"]]
+            psi = p[self.param_idx["psi"]]
         else:
             theta_jn = 0.0
             psi = 0.0
@@ -712,23 +672,19 @@ class WaveformDataset(object):
             if self.spins_aligned:
                 spin_1x = 0.0
                 spin_1y = 0.0
-                spin_1z = p[self.param_idx['chi_1']]
+                spin_1z = p[self.param_idx["chi_1"]]
                 spin_2x = 0.0
                 spin_2y = 0.0
-                spin_2z = p[self.param_idx['chi_2']]
+                spin_2z = p[self.param_idx["chi_2"]]
                 iota = theta_jn
             else:
-                a_1 = p[self.param_idx['a_1']]
-                a_2 = p[self.param_idx['a_2']]
-                tilt_1 = p[self.param_idx['tilt_1']]
-                tilt_2 = p[self.param_idx['tilt_2']]
-                phi_jl = p[self.param_idx['phi_jl']]
-                phi_12 = p[self.param_idx['phi_12']]
-                (iota, spin_1x, spin_1y, spin_1z,
-                 spin_2x, spin_2y, spin_2z) = source_frame_to_radiation(
-                     theta_jn, phi_jl, tilt_1, tilt_2, phi_12, a_1, a_2,
-                     mass_1, mass_2,
-                     self.f_ref, phase)
+                a_1 = p[self.param_idx["a_1"]]
+                a_2 = p[self.param_idx["a_2"]]
+                tilt_1 = p[self.param_idx["tilt_1"]]
+                tilt_2 = p[self.param_idx["tilt_2"]]
+                phi_jl = p[self.param_idx["phi_jl"]]
+                phi_12 = p[self.param_idx["phi_12"]]
+                (iota, spin_1x, spin_1y, spin_1z, spin_2x, spin_2y, spin_2z) = source_frame_to_radiation(theta_jn, phi_jl, tilt_1, tilt_2, phi_12, a_1, a_2, mass_1, mass_2, self.f_ref, phase)
         else:
             spin_1x = 0.0
             spin_1y = 0.0
@@ -738,7 +694,7 @@ class WaveformDataset(object):
             spin_2z = 0.0
             iota = theta_jn
 
-        if self.domain == 'TD':
+        if self.domain == "TD":
             # Start with a TD waveform generated from pycbc. If the
             # approximant is in FD, then this suitably tapers the low
             # frequencies in order to have a finite-length TD waveform
@@ -747,51 +703,53 @@ class WaveformDataset(object):
             # ourselves.
 
             # Make sure f_min is low enough
-            if (self.time_duration >
-                get_waveform_filter_length_in_time(mass1=mass_1, mass2=mass_2,
-                                                   spin1x=spin_1x,
-                                                   spin2x=spin_2x,
-                                                   spin1y=spin_1y,
-                                                   spin2y=spin_2y,
-                                                   spin1z=spin_1z,
-                                                   spin2z=spin_2z,
-                                                   inclination=iota,
-                                                   f_lower=self.f_min,
-                                                   f_ref=self.f_ref,
-                                                   approximant=self.approximant)):
-                print('Warning: f_min not low enough for given '
-                      'waveform duration')
+            if self.time_duration > get_waveform_filter_length_in_time(
+                mass1=mass_1, mass2=mass_2, spin1x=spin_1x, spin2x=spin_2x, spin1y=spin_1y, spin2y=spin_2y, spin1z=spin_1z, spin2z=spin_2z, inclination=iota, f_lower=self.f_min, f_ref=self.f_ref, approximant=self.approximant
+            ):
+                print("Warning: f_min not low enough for given " "waveform duration")
                 print(p)
 
-            hp_TD, hc_TD = get_td_waveform(mass1=mass_1, mass2=mass_2,
-                                           spin1x=spin_1x, spin2x=spin_2x,
-                                           spin1y=spin_1y, spin2y=spin_2y,
-                                           spin1z=spin_1z, spin2z=spin_2z,
-                                           distance=distance,
-                                           coa_phase=phase,
-                                           inclination=iota,  # CHECK THIS!!!
-                                           delta_t=self.delta_t,
-                                           f_lower=self.f_min,
-                                           f_ref=self.f_ref,
-                                           approximant=self.approximant)
+            hp_TD, hc_TD = get_td_waveform(
+                mass1=mass_1,
+                mass2=mass_2,
+                spin1x=spin_1x,
+                spin2x=spin_2x,
+                spin1y=spin_1y,
+                spin2y=spin_2y,
+                spin1z=spin_1z,
+                spin2z=spin_2z,
+                distance=distance,
+                coa_phase=phase,
+                inclination=iota,  # CHECK THIS!!!
+                delta_t=self.delta_t,
+                f_lower=self.f_min,
+                f_ref=self.f_ref,
+                approximant=self.approximant,
+            )
             hp = hp_TD.to_frequencyseries()
             hc = hc_TD.to_frequencyseries()
 
-        elif self.domain in ('FD', 'RB'):
-            if(is_fd_waveform(self.approximant)):
+        elif self.domain in ("FD", "RB"):
+            if is_fd_waveform(self.approximant):
                 # Use the pycbc waveform generator; change this later
-                hp, hc = get_fd_waveform(mass1=mass_1, mass2=mass_2,
-                                         spin1x=spin_1x, spin2x=spin_2x,
-                                         spin1y=spin_1y, spin2y=spin_2y,
-                                         spin1z=spin_1z, spin2z=spin_2z,
-                                         distance=distance,
-                                         coa_phase=phase,
-                                         inclination=iota,
-                                         f_lower=self.f_min,
-                                         f_final=self.f_max,
-                                         delta_f=self.delta_f,
-                                         f_ref=self.f_ref,
-                                         approximant=self.approximant)
+                hp, hc = get_fd_waveform(
+                    mass1=mass_1,
+                    mass2=mass_2,
+                    spin1x=spin_1x,
+                    spin2x=spin_2x,
+                    spin1y=spin_1y,
+                    spin2y=spin_2y,
+                    spin1z=spin_1z,
+                    spin2z=spin_2z,
+                    distance=distance,
+                    coa_phase=phase,
+                    inclination=iota,
+                    f_lower=self.f_min,
+                    f_final=self.f_max,
+                    delta_f=self.delta_f,
+                    f_ref=self.f_ref,
+                    approximant=self.approximant,
+                )
             else:
                 # Use SimInspiralFD. This converts automatically
                 # from the TD to FD waveform, but it requires a timeshift to be
@@ -804,24 +762,15 @@ class WaveformDataset(object):
 
                 lal_approximant = GetApproximantFromString(self.approximant)
 
-                h_p, h_c = SimInspiralFD(mass_1_SI, mass_2_SI,
-                                         spin_1x, spin_1y, spin_1z,
-                                         spin_2x, spin_2y, spin_2z,
-                                         distance_SI, iota, phase,
-                                         0.0, 0.0, 0.0,
-                                         self.delta_f, self.f_min, self.f_max,
-                                         self.f_ref, None,
-                                         lal_approximant)
+                h_p, h_c = SimInspiralFD(mass_1_SI, mass_2_SI, spin_1x, spin_1y, spin_1z, spin_2x, spin_2y, spin_2z, distance_SI, iota, phase, 0.0, 0.0, 0.0, self.delta_f, self.f_min, self.f_max, self.f_ref, None, lal_approximant)
 
                 # If f_max/delta_f is not a power of 2, SimInspiralFD increases
                 # f_max to make this a power of 2. Take only components running
                 # up to f_max.
-                hp = np.zeros_like(self.sample_frequencies,
-                                   dtype=np.complex)
-                hc = np.zeros_like(self.sample_frequencies,
-                                   dtype=np.complex)
-                hp[:] = h_p.data.data[:len(hp)]
-                hc[:] = h_c.data.data[:len(hp)]
+                hp = np.zeros_like(self.sample_frequencies, dtype=np.complex)
+                hc = np.zeros_like(self.sample_frequencies, dtype=np.complex)
+                hp[:] = h_p.data.data[: len(hp)]
+                hc[:] = h_c.data.data[: len(hp)]
 
                 # Zero the strain for frequencies below f_min
                 hp *= self.frequency_mask
@@ -830,26 +779,23 @@ class WaveformDataset(object):
                 # SimInspiralFD sets the merger time so the waveform can be
                 # transformed to TD without wrapping the end of the waveform to
                 # the beginning. Bring the time of coalescence to 0.
-                dt = 1. / self.delta_f + (h_p.epoch.gpsSeconds +
-                                          h_p.epoch.gpsNanoSeconds * 1e-9)
-                hp *= np.exp(- 1j * 2 * np.pi * dt * self.sample_frequencies)
-                hc *= np.exp(- 1j * 2 * np.pi * dt * self.sample_frequencies)
+                dt = 1.0 / self.delta_f + (h_p.epoch.gpsSeconds + h_p.epoch.gpsNanoSeconds * 1e-9)
+                hp *= np.exp(-1j * 2 * np.pi * dt * self.sample_frequencies)
+                hc *= np.exp(-1j * 2 * np.pi * dt * self.sample_frequencies)
 
                 # Convert to pycbc frequencyseries. Later, get rid of pycbc
                 # functions.
-                hp = FrequencySeries(hp, delta_f=self.delta_f,
-                                     epoch=-self.time_duration)
-                hc = FrequencySeries(hc, delta_f=self.delta_f,
-                                     epoch=-self.time_duration)
+                hp = FrequencySeries(hp, delta_f=self.delta_f, epoch=-self.time_duration)
+                hc = FrequencySeries(hc, delta_f=self.delta_f, epoch=-self.time_duration)
 
         if intrinsic_only:
             # Whiten with reference noise PSD and return hp, hc
 
-            hp = hp / (self._get_psd(hp.delta_f, 'ref') ** 0.5)
-            hc = hc / (self._get_psd(hc.delta_f, 'ref') ** 0.5)
+            hp = hp / (self._get_psd(hp.delta_f, "ref") ** 0.5)
+            hc = hc / (self._get_psd(hc.delta_f, "ref") ** 0.5)
 
             # Convert to TD if necessary, ensure correct length
-            if self.domain == 'TD':
+            if self.domain == "TD":
                 hp = hp.to_timeseries().time_slice(-self.time_duration, 0.0)
                 hc = hc.to_timeseries().time_slice(-self.time_duration, 0.0)
 
@@ -860,7 +806,6 @@ class WaveformDataset(object):
 
             h_d_dict = {}
             for ifo, d in self.detectors.items():
-
                 # Project onto antenna pattern
                 fp, fc = d.antenna_pattern(ra, dec, psi, self.ref_time)
                 h_d = fp * hp + fc * hc
@@ -881,9 +826,8 @@ class WaveformDataset(object):
 
                 # Convert to TD if necessary, and ensure waveform is of correct
                 # length
-                if self.domain == 'TD':
-                    h_d = h_d.to_timeseries().time_slice(-self.time_duration,
-                                                         0.0)
+                if self.domain == "TD":
+                    h_d = h_d.to_timeseries().time_slice(-self.time_duration, 0.0)
 
                 h_d_dict[ifo] = h_d.data
 
@@ -911,23 +855,21 @@ class WaveformDataset(object):
             uniform_prior[i] = self.prior[param]
 
             # Fix up non-uniformly distributed priors
-            if param == 'dec':
+            if param == "dec":
                 uniform_prior[i] = np.sin(uniform_prior[i])
-            elif param == 'distance':
+            elif param == "distance":
                 uniform_prior[i] = uniform_prior[i] ** 3.0
 
         # Draw uniform samples
         draw = np.random.random((n, nextrinsic))
-        samples = np.apply_along_axis(lambda x: x*(uniform_prior[:, 1]
-                                                   - uniform_prior[:, 0])
-                                      + uniform_prior[:, 0], 1, draw)
+        samples = np.apply_along_axis(lambda x: x * (uniform_prior[:, 1] - uniform_prior[:, 0]) + uniform_prior[:, 0], 1, draw)
 
         # Undo uniformity transformations
         for i, param in enumerate(self.extrinsic_params):
-            if param == 'dec':
+            if param == "dec":
                 samples[:, i] = np.arcsin(samples[:, i])
-            elif param == 'distance':
-                samples[:, i] = samples[:, i] ** (1.0/3.0)
+            elif param == "distance":
+                samples[:, i] = samples[:, i] ** (1.0 / 3.0)
 
         return samples.astype(np.float32)
 
@@ -950,8 +892,8 @@ class WaveformDataset(object):
             tuple -- (new parameter array, list of detector waveforms)
         """
 
-        if mode not in ('FD', 'RB'):
-            raise Exception('Only works in FD or RB mode.')
+        if mode not in ("FD", "RB"):
+            raise Exception("Only works in FD or RB mode.")
 
         # Array of new parameter values
         p_new = p_initial.copy()
@@ -959,10 +901,8 @@ class WaveformDataset(object):
             p_new[self.param_idx[param]] = p_extrinsic[i]
 
         # Shifts in parameters relative to initial
-        distance_scaling = (p_initial[self.param_idx['distance']]
-                            / p_new[self.param_idx['distance']])
-        time_shift_earth_center = (p_new[self.param_idx['time']]
-                                   - p_initial[self.param_idx['time']])
+        distance_scaling = p_initial[self.param_idx["distance"]] / p_new[self.param_idx["distance"]]
+        time_shift_earth_center = p_new[self.param_idx["time"]] - p_initial[self.param_idx["time"]]
         # phase_shift = (p_new[self.param_idx['phase']]
         #                - p_initial[self.param_idx['phase']])
 
@@ -971,22 +911,21 @@ class WaveformDataset(object):
         # Phase shift has a 2 because GW phase is twice orbital phase.
         #
         # DOES THE PHASE SHIFT NEED UPDATING FOR HIGHER MODES?
-        scale = distance_scaling # * np.exp(2j * phase_shift)
+        scale = distance_scaling  # * np.exp(2j * phase_shift)
         hp = hp * scale
         hc = hc * scale
 
         # Sky position parameters
-        ra = p_new[self.param_idx['ra']]
-        dec = p_new[self.param_idx['dec']]
+        ra = p_new[self.param_idx["ra"]]
+        dec = p_new[self.param_idx["dec"]]
         if self.inclination:
-            psi = p_new[self.param_idx['psi']]
+            psi = p_new[self.param_idx["psi"]]
         else:
             psi = 0.0
 
         # Project onto detectors
         h_d_dict = {}
         for ifo, d in self.detectors.items():
-
             # Project onto antenna pattern
             fp, fc = d.antenna_pattern(ra, dec, psi, self.ref_time)
             h_d = fp * hp + fc * hc
@@ -997,14 +936,12 @@ class WaveformDataset(object):
             # if abs(time_shift) >= 0.1:
             #     raise IndexError
             # Time translate and whiten
-            if mode == 'FD':
-                h_d = h_d * np.exp(- 2j * np.pi * time_shift
-                                   * self.sample_frequencies)
+            if mode == "FD":
+                h_d = h_d * np.exp(-2j * np.pi * time_shift * self.sample_frequencies)
                 h_d = self.whiten_relative(h_d, ifo)
 
-            elif mode == 'RB':
-                h_d = self.basis.time_translate(h_d, time_shift,
-                                                interpolation='cubic')
+            elif mode == "RB":
+                h_d = self.basis.time_translate(h_d, time_shift, interpolation="cubic")
                 h_d = self.basis.whiten(h_d, self.psd_names[ifo])
 
             # h_d_list.append(h_d)
@@ -1020,14 +957,13 @@ class WaveformDataset(object):
         whitened with detector PSDs.
         """
 
-        ref_psd_name = self.psd_names['ref']
-        ref_psd = np.array(self._get_psd(self.delta_f, 'ref'))
+        ref_psd_name = self.psd_names["ref"]
+        ref_psd = np.array(self._get_psd(self.delta_f, "ref"))
 
         self.relative_whitening_dict = {}
         for ifo in self.detectors.keys():
             psd_name = self.psd_names[ifo]
-            if ((psd_name != ref_psd_name)
-                    and (psd_name not in self.relative_whitening_dict.keys())):
+            if (psd_name != ref_psd_name) and (psd_name not in self.relative_whitening_dict.keys()):
                 psd = np.array(self._get_psd(self.delta_f, ifo))
 
                 # Multiply FD waveform by this factor to whiten
@@ -1050,7 +986,7 @@ class WaveformDataset(object):
             array -- whitened waveform
         """
 
-        if self.psd_names[ifo] != self.psd_names['ref']:
+        if self.psd_names[ifo] != self.psd_names["ref"]:
             return h * self.relative_whitening_dict[self.psd_names[ifo]]
         else:
             return h
@@ -1075,8 +1011,8 @@ class WaveformDataset(object):
         if mode is None:
             mode = self.domain
 
-        if mode not in ('FD', 'RB'):
-            raise Exception('Method only implemented in FD or RB.')
+        if mode not in ("FD", "RB"):
+            raise Exception("Method only implemented in FD or RB.")
 
         # Translate idx to an index of the full dataset
         if train:
@@ -1090,25 +1026,30 @@ class WaveformDataset(object):
         p_initial = self.parameters[orig_idx]
 
         # if sample_extrinsic_only:
-            # Generate random extrinsic parameters.
-        if self.sampling_from == 'uniform':
+        # Generate random extrinsic parameters.
+        if self.sampling_from == "uniform":
             p_extrinsic = self.sample_prior_extrinsic(1)[0]
-        elif self.sampling_from == 'posterior':
+        elif self.sampling_from == "posterior":
             p_extrinsic = self.sample_prior_extrinsic_posterior(1)[0]
-        elif self.sampling_from in ['mixed', 'all_event_mixed']:
-            p_extrinsic = (self.sample_prior_extrinsic_posterior(1)[0]
-                if np.random.binomial(1, self.mixed_alpha,)
-                    else self.sample_prior_extrinsic(1)[0])
+        elif self.sampling_from in ["mixed", "all_event_mixed"]:
+            p_extrinsic = (
+                self.sample_prior_extrinsic_posterior(1)[0]
+                if np.random.binomial(
+                    1,
+                    self.mixed_alpha,
+                )
+                else self.sample_prior_extrinsic(1)[0]
+            )
 
         # else: # self.parameters have been resampled.
-            # if self.sampling_from == 'posterior':
-            #     p_initial = self._sample_prior_posterior(1)[0]
-            #     p_extrinsic = self.sample_prior_extrinsic_posterior(1)
-            # elif self.sampling_from == 'uniform':
-            #     p_initial = self._sample_prior(1)[0]
-            #     p_extrinsic = self.sample_prior_extrinsic(1)[0]
-            # print(p_initial.shape, p_extrinsic.shape)
-            # pass
+        # if self.sampling_from == 'posterior':
+        #     p_initial = self._sample_prior_posterior(1)[0]
+        #     p_extrinsic = self.sample_prior_extrinsic_posterior(1)
+        # elif self.sampling_from == 'uniform':
+        #     p_initial = self._sample_prior(1)[0]
+        #     p_extrinsic = self.sample_prior_extrinsic(1)[0]
+        # print(p_initial.shape, p_extrinsic.shape)
+        # pass
         # Generate the waveform.
         #
         # This usually only gets run when generating noisy test FD
@@ -1118,9 +1059,7 @@ class WaveformDataset(object):
         # Intrinsic waveform
         #
         # Type conversion of the parameters is needed for lal.
-        hp, hc = self._generate_whitened_waveform(
-            p_initial.astype(np.float64),
-            intrinsic_only=True)
+        hp, hc = self._generate_whitened_waveform(p_initial.astype(np.float64), intrinsic_only=True)
         hp = hp.astype(np.complex64)
         hc = hc.astype(np.complex64)
 
@@ -1128,19 +1067,17 @@ class WaveformDataset(object):
         hp = self.basis.fseries_to_basis_coefficients(hp)
         hc = self.basis.fseries_to_basis_coefficients(hc)
         # Apply extrinsic parameters to obtain detector waveforms
-        p, h_det = self.get_detector_waveforms(hp, hc, p_initial, p_extrinsic,
-                                               mode)
+        p, h_det = self.get_detector_waveforms(hp, hc, p_initial, p_extrinsic, mode)
 
         # If we have an SNR threshold, resample the distance such that the
         # threshold is respected.
-        if ((self.snr_threshold is not None)
-                or (self.distance_prior_fn is not None)):
+        if (self.snr_threshold is not None) or (self.distance_prior_fn is not None):
             p, h_det, weight = self._resample_distance(p, h_det)
         else:
             weight = 1.0
 
         stacked = np.hstack(list(h_det.values()))
-        snr = (np.sqrt(np.sum(np.abs(stacked)**2)) / self._noise_std)
+        snr = np.sqrt(np.sum(np.abs(stacked) ** 2)) / self._noise_std
 
         return p, h_det, weight, snr
 
@@ -1162,8 +1099,7 @@ class WaveformDataset(object):
             n_test {int} -- number of test waveforms (default: {10000})
         """
 
-        print('Generating {} detector FD waveforms (from {}) for training reduced basis.'
-              .format(n_train, prior_fun.__name__))
+        print("Generating {} detector FD waveforms (from {}) for training reduced basis.".format(n_train, prior_fun.__name__))
 
         h_detector = {}
         for ifo in self.detectors.keys():
@@ -1173,12 +1109,12 @@ class WaveformDataset(object):
             p = prior_fun(1)[0]
             # To generate reduced basis, fix all waveforms to same fiducial
             # distance.
-            p[self.param_idx['distance']] = self.fiducial_params['distance']
+            p[self.param_idx["distance"]] = self.fiducial_params["distance"]
             h_d = self._generate_whitened_waveform(p, intrinsic_only=False)
             for ifo, h in h_d.items():
                 h_detector[ifo][i] = h
 
-        print('Generating reduced basis for training detector waveforms')
+        print("Generating reduced basis for training detector waveforms")
 
         training_array = np.vstack(list(h_detector.values()))
         self.basis = SVDBasis()
@@ -1195,33 +1131,31 @@ class WaveformDataset(object):
         #     # Compute standardization for given ifo
         #     self.basis.init_standardization(ifo, h_array_RB, self._noise_std)
 
-        print('Evaluating performance on training set waveforms.')
+        print("Evaluating performance on training set waveforms.")
         matches = []
         for h_FD in tqdm(training_array):
             h_RB = self.basis.fseries_to_basis_coefficients(h_FD)
             h_reconstructed = self.basis.basis_coefficients_to_fseries(h_RB)
 
-            norm1 = np.mean(np.abs(h_FD)**2)
-            norm2 = np.mean(np.abs(h_reconstructed)**2)
-            inner = np.mean(h_FD.conj()*h_reconstructed).real
+            norm1 = np.mean(np.abs(h_FD) ** 2)
+            norm2 = np.mean(np.abs(h_reconstructed) ** 2)
+            inner = np.mean(h_FD.conj() * h_reconstructed).real
 
             matches.append(inner / np.sqrt(norm1 * norm2))
         mismatches = 1 - np.array(matches)
-        print('  Mean mismatch = {}'.format(np.mean(mismatches)))
-        print('  Standard deviation = {}'.format(np.std(mismatches)))
-        print('  Max mismatch = {}'.format(np.max(mismatches)))
-        print('  Median mismatch = {}'.format(np.median(mismatches)))
-        print('  Percentiles:')
-        print('    99    -> {}'.format(np.percentile(mismatches, 99)))
-        print('    99.9  -> {}'.format(np.percentile(mismatches, 99.9)))
-        print('    99.99 -> {}'.format(np.percentile(mismatches, 99.99)))
+        print("  Mean mismatch = {}".format(np.mean(mismatches)))
+        print("  Standard deviation = {}".format(np.std(mismatches)))
+        print("  Max mismatch = {}".format(np.max(mismatches)))
+        print("  Median mismatch = {}".format(np.median(mismatches)))
+        print("  Percentiles:")
+        print("    99    -> {}".format(np.percentile(mismatches, 99)))
+        print("    99.9  -> {}".format(np.percentile(mismatches, 99.9)))
+        print("    99.99 -> {}".format(np.percentile(mismatches, 99.99)))
         print()
 
-    def test_reduced_basis(self, n_test=10000, prior_fun=None, fiducial_distance=None, truncate=None, 
-                            save_dir=None):
+    def test_reduced_basis(self, n_test=10000, prior_fun=None, fiducial_distance=None, truncate=None, save_dir=None):
         # Evaluation on test waveforms
-        print('Generating {} detector FD waveforms from ({}) for testing reduced basis.\n(Fiducial distance: {} Mpc)'
-              .format(n_test, prior_fun.__name__, fiducial_distance))
+        print("Generating {} detector FD waveforms from ({}) for testing reduced basis.\n(Fiducial distance: {} Mpc)".format(n_test, prior_fun.__name__, fiducial_distance))
 
         h_detector = {}
         for ifo in self.detectors.keys():
@@ -1234,44 +1168,40 @@ class WaveformDataset(object):
             # To generate reduced basis, fix all waveforms to same fiducial
             # distance.
             if fiducial_distance:
-                p[self.param_idx['distance']] = fiducial_distance
+                p[self.param_idx["distance"]] = fiducial_distance
             h_d = self._generate_whitened_waveform(p, intrinsic_only=False)
             for ifo, h in h_d.items():
                 h_detector[ifo][i] = h
 
-        print('Evaluating performance on test set waveforms.\nTruncate at {}/{}.'
-              .format(truncate if truncate else self.Nrb, self.Nrb))
-        test_array = np.vstack(list(h_detector.values())) # [H1..., L1..., ....].shape = (len(det)*n_test, 8193)
+        print("Evaluating performance on test set waveforms.\nTruncate at {}/{}.".format(truncate if truncate else self.Nrb, self.Nrb))
+        test_array = np.vstack(list(h_detector.values()))  # [H1..., L1..., ....].shape = (len(det)*n_test, 8193)
         matches = []
         for h_FD in tqdm(test_array):
-            h_RB = self.basis.fseries_to_basis_coefficients(h_FD,
-                                                            truncate)
-            h_reconstructed = self.basis.basis_coefficients_to_fseries(
-                h_RB,
-                truncate)
+            h_RB = self.basis.fseries_to_basis_coefficients(h_FD, truncate)
+            h_reconstructed = self.basis.basis_coefficients_to_fseries(h_RB, truncate)
 
-            norm1 = np.mean(np.abs(h_FD)**2)
-            norm2 = np.mean(np.abs(h_reconstructed)**2)
-            inner = np.mean(h_FD.conj()*h_reconstructed).real
+            norm1 = np.mean(np.abs(h_FD) ** 2)
+            norm2 = np.mean(np.abs(h_reconstructed) ** 2)
+            inner = np.mean(h_FD.conj() * h_reconstructed).real
 
             matches.append(inner / np.sqrt(norm1 * norm2))
         mismatches = 1 - np.array(matches)
         if save_dir:
-            addr='{}_{}Mpc_{}trucate'.format(prior_fun.__name__,
-                                            fiducial_distance, truncate,)
-            print('saving mismatches for {}; fiducial:{}Mpc; truncate:{}\nat {}{}.npz'.format(prior_fun.__name__, 
-                                                                            fiducial_distance, truncate,
-                                                                            save_dir,addr))
-            np.savez_compressed(save_dir+addr, 
-                                p_save=p_save, mismatches=mismatches)
-        print('  Mean mismatch = {}'.format(np.mean(mismatches)))
-        print('  Standard deviation = {}'.format(np.std(mismatches)))
-        print('  Max mismatch = {}'.format(np.max(mismatches)))
-        print('  Median mismatch = {}'.format(np.median(mismatches)))
-        print('  Percentiles:')
-        print('    99    -> {}'.format(np.percentile(mismatches, 99)))
-        print('    99.9  -> {}'.format(np.percentile(mismatches, 99.9)))
-        print('    99.99 -> {}'.format(np.percentile(mismatches, 99.99)))
+            addr = "{}_{}Mpc_{}trucate".format(
+                prior_fun.__name__,
+                fiducial_distance,
+                truncate,
+            )
+            print("saving mismatches for {}; fiducial:{}Mpc; truncate:{}\nat {}{}.npz".format(prior_fun.__name__, fiducial_distance, truncate, save_dir, addr))
+            np.savez_compressed(save_dir + addr, p_save=p_save, mismatches=mismatches)
+        print("  Mean mismatch = {}".format(np.mean(mismatches)))
+        print("  Standard deviation = {}".format(np.std(mismatches)))
+        print("  Max mismatch = {}".format(np.max(mismatches)))
+        print("  Median mismatch = {}".format(np.median(mismatches)))
+        print("  Percentiles:")
+        print("    99    -> {}".format(np.percentile(mismatches, 99)))
+        print("    99.9  -> {}".format(np.percentile(mismatches, 99.9)))
+        print("    99.99 -> {}".format(np.percentile(mismatches, 99.99)))
         print()
 
         # print('Projecting plus and cross polarizations onto basis.')
@@ -1292,8 +1222,8 @@ class WaveformDataset(object):
 
         # Relative whitening
 
-        ref_psd_name = self.psd_names['ref']
-        ref_psd = np.array(self._get_psd(self.delta_f, 'ref'))
+        ref_psd_name = self.psd_names["ref"]
+        ref_psd = np.array(self._get_psd(self.delta_f, "ref"))
 
         for ifo, psd_name in self.psd_names.items():
             psd = np.array(self._get_psd(self.delta_f, ifo))
@@ -1305,11 +1235,10 @@ class WaveformDataset(object):
         # Add the earth-crossing time to the ends of the time prior.
         # This is overkill, since we really just need the radius.
         earth_crossing_time = 2 * REARTH_SI / C_SI
-        t_min = self.prior['time'][0] - earth_crossing_time
-        t_max = self.prior['time'][1] + earth_crossing_time
+        t_min = self.prior["time"][0] - earth_crossing_time
+        t_max = self.prior["time"][1] + earth_crossing_time
 
-        self.basis.init_time_translation(t_min, t_max, TIME_TRANSLATION_PTS,
-                                         self.sample_frequencies)
+        self.basis.init_time_translation(t_min, t_max, TIME_TRANSLATION_PTS, self.sample_frequencies)
 
     def truncate_basis(self, n):
         """Truncate the reduced basis to dimension n.
@@ -1319,53 +1248,54 @@ class WaveformDataset(object):
         """
 
         if n >= self.Nrb:
-            print('Reduced basis has {} components already.'.format(self.Nrb))
+            print("Reduced basis has {} components already.".format(self.Nrb))
             return
         else:
-            print('Truncating reduced basis from {} to {} elements.'.format(
-                self.Nrb, n
-            ))
+            print("Truncating reduced basis from {} to {} elements.".format(self.Nrb, n))
 
         self.basis.truncate(n)
         self.Nrb = n
 
-        #self.hp = self.hp[:, :n]
-        #self.hc = self.hc[:, :n]
+        # self.hp = self.hp[:, :n]
+        # self.hc = self.hc[:, :n]
 
     #
     # File I/O for waveform database
     #
-    def save_setting(self, data_dir='.', config_fn='settings.json'):
+    def save_setting(self, data_dir=".", config_fn="settings.json"):
         p = Path(data_dir)
         p.mkdir(parents=True, exist_ok=True)
 
         # Save configuration parameters
 
-        with open(p / config_fn, 'w') as f_config:
-            json.dump(dict(domain=self.domain,
-                           prior=self.prior,
-                           approximant=self.approximant,
-                           params=self.param_idx,
-                           latex=self.parameters_latex_dict,
-                           detectors=list(self.detectors.keys()),
-                           psds=self.psd_names,
-                           f_min=self.f_min,
-                           f_min_psd=self.f_min_psd,
-                           sampling_rate=self.sampling_rate,
-                           time_duration=self.time_duration,
-                           ref_time=self.ref_time,
-                           f_ref=self.f_ref,
-                           extrinsic_at_train=self.extrinsic_at_train,
-                           extrinsic_params=self.extrinsic_params,
-                           fiducial_params=self.fiducial_params,
-                           window_factor=self.window_factor,
-                           event=self.event,
-                           event_dir=str(self.event_dir),
-                           ), f_config, indent=4)
+        with open(p / config_fn, "w") as f_config:
+            json.dump(
+                dict(
+                    domain=self.domain,
+                    prior=self.prior,
+                    approximant=self.approximant,
+                    params=self.param_idx,
+                    latex=self.parameters_latex_dict,
+                    detectors=list(self.detectors.keys()),
+                    psds=self.psd_names,
+                    f_min=self.f_min,
+                    f_min_psd=self.f_min_psd,
+                    sampling_rate=self.sampling_rate,
+                    time_duration=self.time_duration,
+                    ref_time=self.ref_time,
+                    f_ref=self.f_ref,
+                    extrinsic_at_train=self.extrinsic_at_train,
+                    extrinsic_params=self.extrinsic_params,
+                    fiducial_params=self.fiducial_params,
+                    window_factor=self.window_factor,
+                    event=self.event,
+                    event_dir=str(self.event_dir),
+                ),
+                f_config,
+                indent=4,
+            )
 
-
-    def save(self, data_dir='.', data_fn='waveform_dataset.hdf5',
-             config_fn='settings.json'):
+    def save(self, data_dir=".", data_fn="waveform_dataset.hdf5", config_fn="settings.json"):
         """Save the database of parameters and waveforms to an HDF5 file,
         and the configuration parameters to a json file.
 
@@ -1381,92 +1311,92 @@ class WaveformDataset(object):
 
         # Save configuration parameters
 
-        with open(p / config_fn, 'w') as f_config:
-            json.dump(dict(domain=self.domain,
-                           prior=self.prior,
-                           approximant=self.approximant,
-                           params=self.param_idx,
-                           latex=self.parameters_latex_dict,
-                           detectors=list(self.detectors.keys()),
-                           psds=self.psd_names,
-                           f_min=self.f_min,
-                           f_min_psd=self.f_min_psd,
-                           sampling_rate=self.sampling_rate,
-                           time_duration=self.time_duration,
-                           ref_time=self.ref_time,
-                           f_ref=self.f_ref,
-                           extrinsic_at_train=self.extrinsic_at_train,
-                           extrinsic_params=self.extrinsic_params,
-                           fiducial_params=self.fiducial_params,
-                           window_factor=self.window_factor,
-                           event=self.event,
-                           event_dir=str(self.event_dir)
-                           ), f_config, indent=4)
+        with open(p / config_fn, "w") as f_config:
+            json.dump(
+                dict(
+                    domain=self.domain,
+                    prior=self.prior,
+                    approximant=self.approximant,
+                    params=self.param_idx,
+                    latex=self.parameters_latex_dict,
+                    detectors=list(self.detectors.keys()),
+                    psds=self.psd_names,
+                    f_min=self.f_min,
+                    f_min_psd=self.f_min_psd,
+                    sampling_rate=self.sampling_rate,
+                    time_duration=self.time_duration,
+                    ref_time=self.ref_time,
+                    f_ref=self.f_ref,
+                    extrinsic_at_train=self.extrinsic_at_train,
+                    extrinsic_params=self.extrinsic_params,
+                    fiducial_params=self.fiducial_params,
+                    window_factor=self.window_factor,
+                    event=self.event,
+                    event_dir=str(self.event_dir),
+                ),
+                f_config,
+                indent=4,
+            )
 
         # Save data (waveforms, parameters)
 
-        f_data = h5py.File(p / data_fn, 'w')
+        f_data = h5py.File(p / data_fn, "w")
 
-        f_data.create_dataset('parameters', data=self.parameters,
-                              compression='gzip', compression_opts=9)
+        f_data.create_dataset("parameters", data=self.parameters, compression="gzip", compression_opts=9)
 
         if self.extrinsic_at_train:
             # Save plus and cross polarizations
-            f_data.create_dataset('hp', data=self.hp,
-                                  compression='gzip', compression_opts=9)
-            f_data.create_dataset('hc', data=self.hc,
-                                  compression='gzip', compression_opts=9)
+            f_data.create_dataset("hp", data=self.hp, compression="gzip", compression_opts=9)
+            f_data.create_dataset("hc", data=self.hc, compression="gzip", compression_opts=9)
         else:
             # Save detector waveforms
-            hgroup = f_data.create_group('h')
+            hgroup = f_data.create_group("h")
             for detector, h in self.h_detector.items():
-                hgroup.create_dataset(detector, data=h,
-                                      compression='gzip', compression_opts=9)
+                hgroup.create_dataset(detector, data=h, compression="gzip", compression_opts=9)
 
         f_data.close()
 
-        if self.domain == 'RB':
+        if self.domain == "RB":
             self.basis.save(data_dir)
 
-    def load_setting(self, data_dir='.', config_fn='settings.json', sample_extrinsic_only = True):
-
+    def load_setting(self, data_dir=".", config_fn="settings.json", sample_extrinsic_only=True):
         self.sample_extrinsic_only = sample_extrinsic_only
         p = Path(data_dir)
 
         # Load configuration
 
-        with open(p / config_fn, 'r') as f_config:
+        with open(p / config_fn, "r") as f_config:
             d = json.load(f_config)
-            self.prior = d['prior']
-            self.approximant = d['approximant']
-            self.param_idx = d['params']
-            self.parameters_latex_dict = d['latex']
-            ifos = d['detectors']
+            self.prior = d["prior"]
+            self.approximant = d["approximant"]
+            self.param_idx = d["params"]
+            self.parameters_latex_dict = d["latex"]
+            ifos = d["detectors"]
             self.init_detectors(ifos)
-            self.psd_names = d['psds']
-            self.f_min = d['f_min']
-            self.f_min_psd = d['f_min_psd']
-            self.sampling_rate = d['sampling_rate']
-            self.time_duration = d['time_duration']
-            self.ref_time = d['ref_time']
-            if 'extrinsic_at_train' in d.keys():  # Compatibility
-                self.extrinsic_at_train = d['extrinsic_at_train']
+            self.psd_names = d["psds"]
+            self.f_min = d["f_min"]
+            self.f_min_psd = d["f_min_psd"]
+            self.sampling_rate = d["sampling_rate"]
+            self.time_duration = d["time_duration"]
+            self.ref_time = d["ref_time"]
+            if "extrinsic_at_train" in d.keys():  # Compatibility
+                self.extrinsic_at_train = d["extrinsic_at_train"]
             else:
                 self.extrinsic_at_train = False
-            if 'extrinsic_params' in d.keys():
-                self.extrinsic_params = d['extrinsic_params']
-            if 'fiducial_params' in d.keys():
-                self.fiducial_params = d['fiducial_params']
-            if 'f_ref' in d.keys():
-                self.f_ref = d['f_ref']
-            if 'domain' in d.keys():  # Compatibility
-                self.domain = d['domain']
+            if "extrinsic_params" in d.keys():
+                self.extrinsic_params = d["extrinsic_params"]
+            if "fiducial_params" in d.keys():
+                self.fiducial_params = d["fiducial_params"]
+            if "f_ref" in d.keys():
+                self.f_ref = d["f_ref"]
+            if "domain" in d.keys():  # Compatibility
+                self.domain = d["domain"]
             else:
-                self.domain = 'TD'
+                self.domain = "TD"
             try:
-                self.event = d['event']
-                event_dir = d['event_dir']
-                if event_dir != 'None':
+                self.event = d["event"]
+                event_dir = d["event_dir"]
+                if event_dir != "None":
                     self.event_dir = Path(event_dir)
                 self.load_event(self.event_dir)
             except:
@@ -1477,24 +1407,21 @@ class WaveformDataset(object):
 
         self.spins = False
         self.inclination = False
-        if (('chi_1' in self.param_idx.keys()) or
-                ('chi1z') in self.param_idx.keys()):
+        if ("chi_1" in self.param_idx.keys()) or ("chi1z") in self.param_idx.keys():
             self.spins = True
             self.spins_aligned = True
-        if 'a_1' in self.param_idx.keys():
+        if "a_1" in self.param_idx.keys():
             self.spins = True
             self.spins_aligned = False
-        if (('theta_jn' in self.param_idx.keys())
-                or ('inc' in self.param_idx.keys())):
+        if ("theta_jn" in self.param_idx.keys()) or ("inc" in self.param_idx.keys()):
             self.inclination = True
 
         if self.extrinsic_at_train:
-            if self.domain == 'FD':
-                print('extrinsic_at_train=True, domain=FD, So init_relative_whitening...')
+            if self.domain == "FD":
+                print("extrinsic_at_train=True, domain=FD, So init_relative_whitening...")
                 self.init_relative_whitening()
 
-    def load(self, data_dir='.', data_fn='waveform_dataset.hdf5',
-             config_fn='settings.json'):
+    def load(self, data_dir=".", data_fn="waveform_dataset.hdf5", config_fn="settings.json"):
         """Load a database created with the save method.
 
         Keyword Arguments:
@@ -1509,38 +1436,38 @@ class WaveformDataset(object):
 
         # Load configuration
 
-        with open(p / config_fn, 'r') as f_config:
+        with open(p / config_fn, "r") as f_config:
             d = json.load(f_config)
-            self.prior = d['prior']
-            self.approximant = d['approximant']
-            self.param_idx = d['params']
-            self.parameters_latex_dict = d['latex']
-            ifos = d['detectors']
+            self.prior = d["prior"]
+            self.approximant = d["approximant"]
+            self.param_idx = d["params"]
+            self.parameters_latex_dict = d["latex"]
+            ifos = d["detectors"]
             self.init_detectors(ifos)
-            self.psd_names = d['psds']
-            self.f_min = d['f_min']
-            self.f_min_psd = d['f_min_psd']
-            self.sampling_rate = d['sampling_rate']
-            self.time_duration = d['time_duration']
-            self.ref_time = d['ref_time']
-            if 'extrinsic_at_train' in d.keys():  # Compatibility
-                self.extrinsic_at_train = d['extrinsic_at_train']
+            self.psd_names = d["psds"]
+            self.f_min = d["f_min"]
+            self.f_min_psd = d["f_min_psd"]
+            self.sampling_rate = d["sampling_rate"]
+            self.time_duration = d["time_duration"]
+            self.ref_time = d["ref_time"]
+            if "extrinsic_at_train" in d.keys():  # Compatibility
+                self.extrinsic_at_train = d["extrinsic_at_train"]
             else:
                 self.extrinsic_at_train = False
-            if 'extrinsic_params' in d.keys():
-                self.extrinsic_params = d['extrinsic_params']
-            if 'fiducial_params' in d.keys():
-                self.fiducial_params = d['fiducial_params']
-            if 'f_ref' in d.keys():
-                self.f_ref = d['f_ref']
-            if 'domain' in d.keys():  # Compatibility
-                self.domain = d['domain']
+            if "extrinsic_params" in d.keys():
+                self.extrinsic_params = d["extrinsic_params"]
+            if "fiducial_params" in d.keys():
+                self.fiducial_params = d["fiducial_params"]
+            if "f_ref" in d.keys():
+                self.f_ref = d["f_ref"]
+            if "domain" in d.keys():  # Compatibility
+                self.domain = d["domain"]
             else:
-                self.domain = 'TD'
+                self.domain = "TD"
             try:
-                self.event = d['event']
-                event_dir = d['event_dir']
-                if event_dir != 'None':
+                self.event = d["event"]
+                event_dir = d["event_dir"]
+                if event_dir != "None":
                     self.event_dir = Path(event_dir)
                 self.load_event(self.event_dir)
             except:
@@ -1551,44 +1478,42 @@ class WaveformDataset(object):
 
         self.spins = False
         self.inclination = False
-        if (('chi_1' in self.param_idx.keys()) or
-                ('chi1z') in self.param_idx.keys()):
+        if ("chi_1" in self.param_idx.keys()) or ("chi1z") in self.param_idx.keys():
             self.spins = True
             self.spins_aligned = True
-        if 'a_1' in self.param_idx.keys():
+        if "a_1" in self.param_idx.keys():
             self.spins = True
             self.spins_aligned = False
-        if (('theta_jn' in self.param_idx.keys())
-                or ('inc' in self.param_idx.keys())):
+        if ("theta_jn" in self.param_idx.keys()) or ("inc" in self.param_idx.keys()):
             self.inclination = True
 
         # Load data
 
-        f_data = h5py.File(p / data_fn, 'r')
+        f_data = h5py.File(p / data_fn, "r")
 
-        self.parameters = f_data['parameters'][:, :]
+        self.parameters = f_data["parameters"][:, :]
         self.nsamples = len(self.parameters)
 
         self.h_detector = {}
 
         if self.extrinsic_at_train:
-            self.hp = f_data['hp'][:, :]
-            self.hc = f_data['hc'][:, :]
+            self.hp = f_data["hp"][:, :]
+            self.hc = f_data["hc"][:, :]
 
-            if self.domain == 'FD':
+            if self.domain == "FD":
                 self.init_relative_whitening()
 
         else:
-            if 'h' in f_data.keys():
-                hgroup = f_data['h']
+            if "h" in f_data.keys():
+                hgroup = f_data["h"]
             else:
-                hgroup = f_data['h_whitened_TD']  # Compatibility
+                hgroup = f_data["h_whitened_TD"]  # Compatibility
             for ifo in self.detectors.keys():
                 self.h_detector[ifo] = hgroup[ifo][:, :]
 
         f_data.close()
 
-        if self.domain == 'RB':
+        if self.domain == "RB":
             self.basis = SVDBasis()
             self.basis.load(data_dir)
             self.Nrb = self.basis.n
@@ -1608,11 +1533,8 @@ class WaveformDataset(object):
 
         # Define train and test sets
         ntrain = int(round(train_fraction * self.nsamples))
-        self.train_selection = np.random.choice(range(self.nsamples),
-                                                size=ntrain,
-                                                replace=False)
-        self.test_selection = np.array([i for i in range(self.nsamples)
-                                        if i not in self.train_selection])
+        self.train_selection = np.random.choice(range(self.nsamples), size=ntrain, replace=False)
+        self.test_selection = np.array([i for i in range(self.nsamples) if i not in self.train_selection])
 
         self._compute_parameter_statistics()
 
@@ -1694,8 +1616,7 @@ class WaveformDataset(object):
         Each parameter should have mean 0 and standard deviation 1,
         when averaged over the training set."""
 
-        return (self.parameters[self.train_selection]
-                - self.parameters_mean) / self.parameters_std
+        return (self.parameters[self.train_selection] - self.parameters_mean) / self.parameters_std
 
     def x_test(self):
         """Return test set of standardized waveform parameters x.
@@ -1705,8 +1626,7 @@ class WaveformDataset(object):
 
         """
 
-        return (self.parameters[self.test_selection]
-                - self.parameters_mean) / self.parameters_std
+        return (self.parameters[self.test_selection] - self.parameters_mean) / self.parameters_std
 
     def post_process_parameters(self, parameters):
         """Takes as input an array of size (nsamples, nparameters), consisting
@@ -1716,7 +1636,7 @@ class WaveformDataset(object):
         """
 
         if parameters.shape[-1] != self.nparams:
-            raise Exception('Error: wrong number of parameters.')
+            raise Exception("Error: wrong number of parameters.")
 
         return parameters * self.parameters_std + self.parameters_mean
 
@@ -1728,21 +1648,17 @@ class WaveformDataset(object):
         """
 
         if parameters.shape[-1] != self.nparams:
-            raise Exception('Error: wrong number of parameters.')
+            raise Exception("Error: wrong number of parameters.")
 
         return (parameters - self.parameters_mean) / self.parameters_std
 
     def h_train(self):
-        """Return training set of standardized whitened waveforms.
-        """
+        """Return training set of standardized whitened waveforms."""
 
-        if self.domain == 'TD':
-            h_joined = np.concatenate([self.h_detector[d]
-                                       for d in self.detectors.keys()],
-                                      axis=-1)
+        if self.domain == "TD":
+            h_joined = np.concatenate([self.h_detector[d] for d in self.detectors.keys()], axis=-1)
 
-        elif self.domain == 'FD':
-
+        elif self.domain == "FD":
             # Cut out the part of the waveforms below f_min
             start_idx = int(self.f_min / self.delta_f)
 
@@ -1753,19 +1669,15 @@ class WaveformDataset(object):
                 h_joined.append(h_truncated.imag)
             h_joined = np.concatenate(h_joined, axis=-1)
 
-        return h_joined[self.train_selection]/self._noise_std
+        return h_joined[self.train_selection] / self._noise_std
 
     def h_test(self):
-        """Return test set of standardized whitened waveforms.
-        """
+        """Return test set of standardized whitened waveforms."""
 
-        if self.domain == 'TD':
-            h_joined = np.concatenate([self.h_detector[d]
-                                       for d in self.detectors.keys()],
-                                      axis=-1)
+        if self.domain == "TD":
+            h_joined = np.concatenate([self.h_detector[d] for d in self.detectors.keys()], axis=-1)
 
-        elif self.domain == 'FD':
-
+        elif self.domain == "FD":
             # Cut out the part of the waveforms below f_min
             start_idx = int(self.f_min / self.delta_f)
 
@@ -1776,15 +1688,14 @@ class WaveformDataset(object):
                 h_joined.append(h_truncated.imag)
             h_joined = np.concatenate(h_joined, axis=-1)
 
-        return h_joined[self.test_selection]/self._noise_std
+        return h_joined[self.test_selection] / self._noise_std
 
     def x_y_from_p_h(self, p, h, add_noise):
-
-        if self.domain == 'RB':
+        if self.domain == "RB":
             n = self.Nrb
-        elif self.domain == 'FD':
+        elif self.domain == "FD":
             n = int(self.f_max / self.delta_f) + 1
-        elif self.domain == 'TD':
+        elif self.domain == "TD":
             n = self.Nt
 
         # Standardize parameters
@@ -1793,17 +1704,14 @@ class WaveformDataset(object):
         # Repackage detector waveforms and add (optionally) add noise
         y_list = []
         for ifo, d in h.items():
-
             # Add noise. Waveforms are assumed to be white in each detector.
 
             if add_noise:
-
-                if self.domain in ('RB', 'FD'):
-                    noise = (np.random.normal(scale=self._noise_std, size=n)
-                             + np.random.normal(scale=self._noise_std, size=n)*1j)
+                if self.domain in ("RB", "FD"):
+                    noise = np.random.normal(scale=self._noise_std, size=n) + np.random.normal(scale=self._noise_std, size=n) * 1j
                     noise = noise.astype(np.complex64)
 
-                elif self.domain == 'TD':
+                elif self.domain == "TD":
                     noise = np.random.normal(scale=self._noise_std, size=n)
                     noise = noise.astype(np.float32)
 
@@ -1811,20 +1719,20 @@ class WaveformDataset(object):
 
             # Standardize.
 
-            if self.domain == 'RB':
+            if self.domain == "RB":
                 d = self.basis.standardize(d, ifo)
 
-            elif self.domain in ('FD', 'TD'):
+            elif self.domain in ("FD", "TD"):
                 d = d / self._noise_std
 
             # Repackage.
 
-            if self.domain == 'FD':
+            if self.domain == "FD":
                 # Remove components below f_min
                 start_idx = int(self.f_min / self.delta_f)
                 d = d[start_idx:]
 
-            if self.domain in ('FD', 'RB'):
+            if self.domain in ("FD", "RB"):
                 # Real and imaginary parts separately
                 y_list.append(d.real)
                 y_list.append(d.imag)
@@ -1836,29 +1744,29 @@ class WaveformDataset(object):
 
         return x, y
 
-    def save_train(self, data_dir='.', filename='traintest_split.hdf5'):
+    def save_train(self, data_dir=".", filename="traintest_split.hdf5"):
         """Save the list of training and test elements."""
 
         p = Path(data_dir)
         p.mkdir(parents=True, exist_ok=True)
-        f = h5py.File(p / filename, 'w')
+        f = h5py.File(p / filename, "w")
 
-        f.attrs['train_fraction'] = self.train_fraction
-        f.create_dataset('train_selection', data=self.train_selection)
-        f.create_dataset('test_selection', data=self.test_selection)
+        f.attrs["train_fraction"] = self.train_fraction
+        f.create_dataset("train_selection", data=self.train_selection)
+        f.create_dataset("test_selection", data=self.test_selection)
 
         f.close()
 
-    def load_train(self, data_dir='.', filename='traintest_split.hdf5'):
+    def load_train(self, data_dir=".", filename="traintest_split.hdf5"):
         """Load the list of training and test elements, compute necessary
         statistics for standardization."""
 
         p = Path(data_dir)
-        f = h5py.File(p / filename, 'r')
+        f = h5py.File(p / filename, "r")
 
-        self.train_fraction = f.attrs['train_fraction']
-        self.train_selection = f['train_selection'][:]
-        self.test_selection = f['test_selection'][:]
+        self.train_fraction = f.attrs["train_fraction"]
+        self.train_selection = f["train_selection"][:]
+        self.test_selection = f["test_selection"][:]
 
         f.close()
 
@@ -1875,7 +1783,7 @@ class WaveformDataset(object):
     ## Obmited...
     def generate_noisy_test_data(self, n=None):
         """Add unit gaussian noise to each standardized waveform in the test
-         set."""
+        set."""
 
         if self.test_selection is None:
             raise NameError("No test set defined.")
@@ -1885,26 +1793,20 @@ class WaveformDataset(object):
 
         # Create parameter and waveform arrays
 
-        self.noisy_waveforms_parameters = np.empty((n, self.nparams),
-                                                   dtype=np.float32)
+        self.noisy_waveforms_parameters = np.empty((n, self.nparams), dtype=np.float32)
 
         self.noisy_test_waveforms = {}
 
-        print('Generating white noise.')
+        print("Generating white noise.")
         for ifo in self.detectors.keys():
-
             # Start with pure noise
 
-            if self.domain in ('RB', 'FD'):
-                noise = (np.random.normal(scale=self._noise_std,
-                                          size=(n, self.Nf))
-                         + np.random.normal(scale=self._noise_std,
-                                            size=(n, self.Nf)) * 1j)
+            if self.domain in ("RB", "FD"):
+                noise = np.random.normal(scale=self._noise_std, size=(n, self.Nf)) + np.random.normal(scale=self._noise_std, size=(n, self.Nf)) * 1j
                 noise = noise.astype(np.complex64)
 
-            elif self.domain == 'TD':
-                noise = np.random.normal(scale=self._noise_std,
-                                         size=(n, self.Nt))
+            elif self.domain == "TD":
+                noise = np.random.normal(scale=self._noise_std, size=(n, self.Nt))
                 noise = noise.astype(np.float32)
 
             self.noisy_test_waveforms[ifo] = noise
@@ -1912,13 +1814,12 @@ class WaveformDataset(object):
         self._cache_oversampled_parameters(n)
         if not self.sample_extrinsic_only:
             self.parameters = self.cache_parameters.astype(np.float32)
-        print('Generating whitened detector waveforms.')
+        print("Generating whitened detector waveforms.")
         for i in tqdm(range(n)):
-
             # Add in the waveform
 
             if self.extrinsic_at_train:
-                p, h, _, _ = self.p_h_random_extrinsic(i, train=False, mode='FD')
+                p, h, _, _ = self.p_h_random_extrinsic(i, train=False, mode="FD")
                 self.noisy_waveforms_parameters[i] = p
                 for ifo, h_array in self.noisy_test_waveforms.items():
                     h_array[i] += h[ifo]
@@ -1936,38 +1837,36 @@ class WaveformDataset(object):
         #     noise = np.random.standard_normal(h.shape).astype(np.float32)
         #     self.noisy_test_waveforms = h + noise
         #     self.noisy_waveforms_parameters = self.parameters[self.test_selection]
+
     ## Obmited...
-    def save_noisy_test_data(self, data_dir='.',
-                             filename='noisy_test_data.hdf5'):
+    def save_noisy_test_data(self, data_dir=".", filename="noisy_test_data.hdf5"):
         """Save noisy test data to file."""
 
         p = Path(data_dir)
         p.mkdir(parents=True, exist_ok=True)
-        f = h5py.File(p / filename, 'w')
+        f = h5py.File(p / filename, "w")
 
         if self.noisy_test_waveforms is None:
             self.generate_noisy_test_data()
 
         # f.create_dataset('noisy_waveforms', data=self.noisy_test_waveforms)
-        hgroup = f.create_group('injections')
+        hgroup = f.create_group("injections")
         for ifo, h_array in self.noisy_test_waveforms.items():
-            hgroup.create_dataset(ifo, data=h_array,
-                                  compression='gzip', compression_opts=9)
+            hgroup.create_dataset(ifo, data=h_array, compression="gzip", compression_opts=9)
 
         # hgroup = f.create_group('clean')
         # for ifo, h_array in self.noisy_test_waveforms.items():
         #    hgroup.create_dataset(ifo, data=h_array,
         #                          compression='gzip', compression_opts=9)
 
-        f.create_dataset('parameters', data=self.noisy_waveforms_parameters)
-        f.create_dataset('parameters_mean', data=self.parameters_mean)
-        f.create_dataset('parameters_std', data=self.parameters_std)
+        f.create_dataset("parameters", data=self.noisy_waveforms_parameters)
+        f.create_dataset("parameters_mean", data=self.parameters_mean)
+        f.create_dataset("parameters_std", data=self.parameters_std)
 
         f.close()
+
     ## Obmited...
-    def load_noisy_test_data(self, data_dir='.',
-                             data_fn='noisy_test_data.hdf5',
-                             config_fn='settings.json'):
+    def load_noisy_test_data(self, data_dir=".", data_fn="noisy_test_data.hdf5", config_fn="settings.json"):
         """Load noisy test data from file.
 
         This works even without loading a full training set, e.g, for
@@ -1978,72 +1877,70 @@ class WaveformDataset(object):
 
         # Load configuration
 
-        with open(p / config_fn, 'r') as f_config:
+        with open(p / config_fn, "r") as f_config:
             d = json.load(f_config)
-            self.prior = d['prior']
-            self.approximant = d['approximant']
-            self.param_idx = d['params']
-            self.parameters_latex_dict = d['latex']
-            ifos = d['detectors']
+            self.prior = d["prior"]
+            self.approximant = d["approximant"]
+            self.param_idx = d["params"]
+            self.parameters_latex_dict = d["latex"]
+            ifos = d["detectors"]
             self.init_detectors(ifos)
-            self.psd_names = d['psds']
-            self.f_min = d['f_min']
-            self.f_min_psd = d['f_min_psd']
-            self.sampling_rate = d['sampling_rate']
-            self.time_duration = d['time_duration']
-            self.ref_time = d['ref_time']
-            if 'extrinsic_at_train' in d.keys():  # Compatibility
-                self.extrinsic_at_train = d['extrinsic_at_train']
+            self.psd_names = d["psds"]
+            self.f_min = d["f_min"]
+            self.f_min_psd = d["f_min_psd"]
+            self.sampling_rate = d["sampling_rate"]
+            self.time_duration = d["time_duration"]
+            self.ref_time = d["ref_time"]
+            if "extrinsic_at_train" in d.keys():  # Compatibility
+                self.extrinsic_at_train = d["extrinsic_at_train"]
             else:
                 self.extrinsic_at_train = False
-            if 'extrinsic_params' in d.keys():
-                self.extrinsic_params = d['extrinsic_params']
-            if 'fiducial_params' in d.keys():
-                self.fiducial_params = d['fiducial_params']
-            if 'f_ref' in d.keys():
-                self.f_ref = d['f_ref']
-            if 'domain' in d.keys():
-                self.domain = d['domain']
+            if "extrinsic_params" in d.keys():
+                self.extrinsic_params = d["extrinsic_params"]
+            if "fiducial_params" in d.keys():
+                self.fiducial_params = d["fiducial_params"]
+            if "f_ref" in d.keys():
+                self.f_ref = d["f_ref"]
+            if "domain" in d.keys():
+                self.domain = d["domain"]
             else:
-                self.domain = 'TD'
+                self.domain = "TD"
 
         self.nparams = len(self.param_idx)
 
         self.spins = False
         self.inclination = False
-        if (('chi_1' in self.param_idx.keys()) or
-                ('chi1z') in self.param_idx.keys()):
+        if ("chi_1" in self.param_idx.keys()) or ("chi1z") in self.param_idx.keys():
             self.spins = True
             self.spins_aligned = True
-        if 'a_1' in self.param_idx.keys():
+        if "a_1" in self.param_idx.keys():
             self.spins = True
             self.spins_aligned = False
-        if (('theta_jn' in self.param_idx.keys())
-                or ('inc' in self.param_idx.keys())):
+        if ("theta_jn" in self.param_idx.keys()) or ("inc" in self.param_idx.keys()):
             self.inclination = True
 
         # Load noisy waveforms. It is also necessary to have the
         # standardization parameters used for training.
 
-        f_data = h5py.File(p / data_fn, 'r')
+        f_data = h5py.File(p / data_fn, "r")
 
-        if 'noisy_waveforms' in f_data.keys():
+        if "noisy_waveforms" in f_data.keys():
             # For compatibility with old format
-            self.noisy_test_waveforms = f_data['noisy_waveforms'][:, :]
+            self.noisy_test_waveforms = f_data["noisy_waveforms"][:, :]
         else:
-            hgroup = f_data['injections']
+            hgroup = f_data["injections"]
             self.noisy_test_waveforms = {}
             for ifo in hgroup.keys():
                 self.noisy_test_waveforms[ifo] = hgroup[ifo][:, :]
 
-        self.noisy_waveforms_parameters = f_data['parameters'][:, :]
+        self.noisy_waveforms_parameters = f_data["parameters"][:, :]
 
-        self.parameters_mean = f_data['parameters_mean'][:]
-        self.parameters_std = f_data['parameters_std'][:]
+        self.parameters_mean = f_data["parameters_mean"][:]
+        self.parameters_std = f_data["parameters_std"][:]
 
         f_data.close()
 
-        if self.domain == 'RB':
+        if self.domain == "RB":
             self.basis = SVDBasis()
             self.basis.load(data_dir)
             self.Nrb = self.basis.n
@@ -2054,21 +1951,20 @@ class WaveformDataset(object):
     #
 
     def load_event(self, event_dir):
-
         p = Path(event_dir)
         self.event_dir = p
 
         # Load event info
-        with open(p / 'event_info.json', 'r') as f:
+        with open(p / "event_info.json", "r") as f:
             d = json.load(f)
-            self.event = d['event']
-            self.f_min = d['f_min']
+            self.event = d["event"]
+            self.f_min = d["f_min"]
             self.f_min_psd = self.f_min
-            self.f_max = d['f_max']
-            self.time_duration = d['T']
-            self.ref_time = d['t_event']
-            self.window_factor = d['window_factor']
-            detectors = d['detectors']
+            self.f_max = d["f_max"]
+            self.time_duration = d["T"]
+            self.ref_time = d["t_event"]
+            self.window_factor = d["window_factor"]
+            detectors = d["detectors"]
 
         # Initialize detectors
         self.init_detectors(detectors)
@@ -2078,9 +1974,9 @@ class WaveformDataset(object):
         self.psd_names = {}
         for ifo in detectors:
             self.psd[ifo] = {}
-            self.psd_names[ifo] = 'PSD_{}'.format(ifo)
-        self.psd['ref'] = {}
-        self.psd_names['ref'] = self.psd_names[detectors[0]]
+            self.psd_names[ifo] = "PSD_{}".format(ifo)
+        self.psd["ref"] = {}
+        self.psd_names["ref"] = self.psd_names[detectors[0]]
 
     #
     # Methods for working with SNR threshold / changing distance prior
@@ -2102,9 +1998,8 @@ class WaveformDataset(object):
 
         # SNR and luminosity distance of signal
 
-        snr = (np.sqrt(np.sum(np.abs(np.hstack(list(h_det.values())))**2))
-               / self._noise_std)
-        distance = p[self.param_idx['distance']]
+        snr = np.sqrt(np.sum(np.abs(np.hstack(list(h_det.values()))) ** 2)) / self._noise_std
+        distance = p[self.param_idx["distance"]]
 
         if self.snr_threshold is not None:
             # New distance range. We are being a bit conservative, by ensuring
@@ -2112,41 +2007,38 @@ class WaveformDataset(object):
             # bound of the prior range.
 
             threshold_distance = distance * snr / self.snr_threshold
-            lower_bound = self.prior['distance'][0]
-            if threshold_distance > self.prior['distance'][1]:
-                upper_bound = self.prior['distance'][1]
+            lower_bound = self.prior["distance"][0]
+            if threshold_distance > self.prior["distance"][1]:
+                upper_bound = self.prior["distance"][1]
             elif threshold_distance > lower_bound + self.distance_buffer:
                 upper_bound = threshold_distance
             else:
                 upper_bound = lower_bound + self.distance_buffer
 
         else:
-            lower_bound, upper_bound = self.prior['distance']
+            lower_bound, upper_bound = self.prior["distance"]
 
         # Sample a new distance
 
-        if self.distance_prior_fn == 'uniform_distance':
+        if self.distance_prior_fn == "uniform_distance":
             # Use a uniform-in-luminosity distance distribution q.
 
-            new_distance = (lower_bound
-                            + np.random.random() * (upper_bound - lower_bound))
+            new_distance = lower_bound + np.random.random() * (upper_bound - lower_bound)
             q_prob = 1 / (upper_bound - lower_bound)
 
-        elif self.distance_prior_fn == 'inverse_distance':
+        elif self.distance_prior_fn == "inverse_distance":
             # Take q ~ 1/d_L
 
             # Sample from uniform in [0,1]
             u = np.random.random()
 
             # Inverse CDF(q)
-            new_distance = lower_bound * np.exp(
-                (np.log(upper_bound) - np.log(lower_bound)) * u)
+            new_distance = lower_bound * np.exp((np.log(upper_bound) - np.log(lower_bound)) * u)
 
             # evaluate q(d_L)
-            q_prob = 1 / ((np.log(upper_bound) - np.log(lower_bound))
-                          * new_distance)
+            q_prob = 1 / ((np.log(upper_bound) - np.log(lower_bound)) * new_distance)
 
-        elif self.distance_prior_fn == 'inverse_square_distance':
+        elif self.distance_prior_fn == "inverse_square_distance":
             # q ~ 1/d_L^2
 
             # Sample from uniform in [0,1]
@@ -2155,27 +2047,24 @@ class WaveformDataset(object):
             # FIX
 
             # Inverse CDF(q)
-            new_distance = (lower_bound * upper_bound /
-                            (upper_bound - u * (upper_bound - lower_bound)))
+            new_distance = lower_bound * upper_bound / (upper_bound - u * (upper_bound - lower_bound))
 
             # q(d_L)
-            q_prob = (upper_bound * lower_bound /
-                      (new_distance**2 * (upper_bound - lower_bound)))
+            q_prob = upper_bound * lower_bound / (new_distance**2 * (upper_bound - lower_bound))
 
-        elif self.distance_prior_fn == 'linear_distance':
+        elif self.distance_prior_fn == "linear_distance":
             # Take q ~ d_L
 
             # Sample from uniform in [0,1]
             u = np.random.random()
 
             # Inverse CDF(q)
-            new_distance = (lower_bound**2
-                            + u * (upper_bound**2 - lower_bound**2))**(1/2)
+            new_distance = (lower_bound**2 + u * (upper_bound**2 - lower_bound**2)) ** (1 / 2)
 
             # q(d_L)
-            q_prob = 2*new_distance / (upper_bound**2 - lower_bound**2)
+            q_prob = 2 * new_distance / (upper_bound**2 - lower_bound**2)
 
-        elif self.distance_prior_fn == 'power_distance':
+        elif self.distance_prior_fn == "power_distance":
             # Take q ~ d_L^\alpha
 
             # Sample from uniform in [0,1]
@@ -2183,47 +2072,38 @@ class WaveformDataset(object):
 
             if self.distance_power == -1.0:
                 # Inverse CDF(q)
-                new_distance = lower_bound * np.exp(
-                    (np.log(upper_bound) - np.log(lower_bound)) * u)
+                new_distance = lower_bound * np.exp((np.log(upper_bound) - np.log(lower_bound)) * u)
 
                 # evaluate q(d_L)
-                q_prob = 1 / ((np.log(upper_bound) - np.log(lower_bound))
-                              * new_distance)
+                q_prob = 1 / ((np.log(upper_bound) - np.log(lower_bound)) * new_distance)
 
             else:
                 # Inverse CDF(q)
                 a = self.distance_power + 1.0
-                new_distance = (lower_bound**a
-                                + u * (upper_bound**a - lower_bound**a))**(1/a)
+                new_distance = (lower_bound**a + u * (upper_bound**a - lower_bound**a)) ** (1 / a)
 
                 # q(d_L)
-                q_prob = (a*new_distance**(a-1) /
-                          (upper_bound**a - lower_bound**a))
+                q_prob = a * new_distance ** (a - 1) / (upper_bound**a - lower_bound**a)
 
-        elif self.distance_prior_fn == 'bayeswave':
+        elif self.distance_prior_fn == "bayeswave":
             u = np.random.random()
-            new_distance = bw_inverse_cdf(u, self.bw_dstar,
-                                          lower_bound, upper_bound)
-            q_prob = bw_pdf(new_distance, self.bw_dstar,
-                            lower_bound, upper_bound)
+            new_distance = bw_inverse_cdf(u, self.bw_dstar, lower_bound, upper_bound)
+            q_prob = bw_pdf(new_distance, self.bw_dstar, lower_bound, upper_bound)
 
         else:
             # Use a volumetric prior
 
-            new_vol = (lower_bound**3
-                       + np.random.random() * (upper_bound**3
-                                               - lower_bound**3))
-            new_distance = new_vol ** (1/3)
+            new_vol = lower_bound**3 + np.random.random() * (upper_bound**3 - lower_bound**3)
+            new_distance = new_vol ** (1 / 3)
             q_prob = 3 * new_distance**2 / (upper_bound**3 - lower_bound**3)
 
         # Calculate the weight = P(dL) / Q(dL)
 
-        p_prob = 3 * new_distance**2 / (self.prior['distance'][1]**3
-                                        - self.prior['distance'][0]**3)
+        p_prob = 3 * new_distance**2 / (self.prior["distance"][1] ** 3 - self.prior["distance"][0] ** 3)
         weight = p_prob / q_prob
 
         p_new = p.copy()
-        p_new[self.param_idx['distance']] = new_distance
+        p_new[self.param_idx["distance"]] = new_distance
 
         # Rescale the waveform
 
@@ -2236,7 +2116,7 @@ class WaveformDataset(object):
         #           / (self.prior['distance'][1]**3
         #              - self.prior['distance'][0]**3))
 
-        return p_new, h_det_new, 1.0 # weight
+        return p_new, h_det_new, 1.0  # weight
 
     def calculate_threshold_standardizations(self, nsamples=100000):
         """Estimate the variances of the luminosity distance and the
@@ -2257,56 +2137,52 @@ class WaveformDataset(object):
         if nsamples is None or nsamples > len(self.train_selection):
             nsamples = len(self.train_selection)
 
-        if self.domain == 'RB':
+        if self.domain == "RB":
             waveform_size = self.Nrb
-        elif self.domain == 'FD':
+        elif self.domain == "FD":
             waveform_size = self.Nf
         else:
-            print('Not implemented.')
+            print("Not implemented.")
             return
 
         # print('Calculating standardization variances based on SNR threshold'
         #       ' of {}'.format(self.snr_threshold))
-        print('  Generating {} detector waveforms'.format(nsamples))
+        print("  Generating {} detector waveforms".format(nsamples))
 
         # Create arrays
         h_detector = {}
         for ifo in self.detectors.keys():
-            h_detector[ifo] = np.empty((nsamples, waveform_size),
-                                       dtype=np.complex64)
+            h_detector[ifo] = np.empty((nsamples, waveform_size), dtype=np.complex64)
         # distances = np.empty(nsamples, dtype=np.float32)
 
-        if self.sampling_from == 'posterior':
+        if self.sampling_from == "posterior":
             self.parameters = self._sample_prior_posterior(self.nsamples).astype(np.float32)
-        elif self.sampling_from == 'uniform':
+        elif self.sampling_from == "uniform":
             self.parameters = self._sample_prior(self.nsamples).astype(np.float32)
-        elif self.sampling_from in ['mixed', 'all_event_mixed']:
+        elif self.sampling_from in ["mixed", "all_event_mixed"]:
             parameters_posterior = self._sample_prior_posterior(self.nsamples).astype(np.float32)
             parameters_uniform = self._sample_prior(self.nsamples).astype(np.float32)
-            self.parameters = np.concatenate((parameters_posterior[:int(self.nsamples*self.mixed_alpha)], 
-                                                  parameters_uniform[:(self.nsamples-int(self.nsamples*self.mixed_alpha))]),axis=0)
+            self.parameters = np.concatenate((parameters_posterior[: int(self.nsamples * self.mixed_alpha)], parameters_uniform[: (self.nsamples - int(self.nsamples * self.mixed_alpha))]), axis=0)
         # Set extrinsic parameters to fiducial values.
         print("Setting extrinsic parameters to fiducial values.")
         for extrinsic_param, value in self.fiducial_params.items():
             self.parameters[:, self.param_idx[extrinsic_param]] = value
 
-
         # Generate distances and waveforms
         for i in tqdm(range(nsamples)):
-            p, h_det, _, _ = self.p_h_random_extrinsic(i, 
-                        sample_extrinsic_only=self.sample_extrinsic_only, train=True)
+            p, h_det, _, _ = self.p_h_random_extrinsic(i, sample_extrinsic_only=self.sample_extrinsic_only, train=True)
             # distances[i] = p[self.param_idx['distance']]
             for ifo, h in h_det.items():
                 h_detector[ifo][i] = h
 
-        print('  Calculating new standardization factors.')
+        print("  Calculating new standardization factors.")
 
         # # Distance mean and standard deviation
         # self.parameters_mean[self.param_idx['distance']] = np.mean(distances)
         # self.parameters_std[self.param_idx['distance']] = np.std(distances)
 
         # Reduced basis standardization
-        if self.domain == 'RB':
+        if self.domain == "RB":
             for ifo, h_array in h_detector.items():
                 self.basis.init_standardization(ifo, h_array, self._noise_std)
 
@@ -2315,7 +2191,6 @@ class WaveformDatasetTorch(Dataset):
     """Wrapper for a WaveformDataset to use with PyTorch DataLoader."""
 
     def __init__(self, wfd, train):
-
         self.wfd = wfd
         self.train = train
 
@@ -2331,32 +2206,31 @@ class WaveformDatasetTorch(Dataset):
 
         # shuffle = False
         if (idx == 0) and (not self.wfd.sample_extrinsic_only):
-            if self.wfd.sampling_from == 'posterior':
+            if self.wfd.sampling_from == "posterior":
                 self.wfd.parameters = self.wfd._sample_prior_posterior(self.wfd.nsamples).astype(np.float32)
-            elif self.wfd.sampling_from == 'uniform':
+            elif self.wfd.sampling_from == "uniform":
                 self.wfd.parameters = self.wfd._sample_prior(self.wfd.nsamples).astype(np.float32)
-            elif self.wfd.sampling_from in ['mixed', 'all_event_mixed']:
+            elif self.wfd.sampling_from in ["mixed", "all_event_mixed"]:
                 parameters_posterior = self.wfd._sample_prior_posterior(self.wfd.nsamples).astype(np.float32)
                 parameters_uniform = self.wfd._sample_prior(self.wfd.nsamples).astype(np.float32)
-                self.wfd.parameters = np.concatenate((parameters_posterior[:int(self.wfd.nsamples*self.wfd.mixed_alpha)],
-                                                    parameters_uniform[:(self.wfd.nsamples-int(self.wfd.nsamples*self.wfd.mixed_alpha))]),axis=0)
+                self.wfd.parameters = np.concatenate((parameters_posterior[: int(self.wfd.nsamples * self.wfd.mixed_alpha)], parameters_uniform[: (self.wfd.nsamples - int(self.wfd.nsamples * self.wfd.mixed_alpha))]), axis=0)
                 # I have to shuffle the mixed parameters...
                 index = np.arange(self.wfd.nsamples)
                 np.random.shuffle(index)
                 self.wfd.parameters = self.wfd.parameters[index]
             else:
                 raise
-            print('Re-generating waveforms for {} prior.'.format(self.wfd.sampling_from))
+            print("Re-generating waveforms for {} prior.".format(self.wfd.sampling_from))
             # Set extrinsic parameters to fiducial values.
             print("Setting extrinsic parameters to fiducial values.")
             for extrinsic_param, value in self.wfd.fiducial_params.items():
-                self.wfd.parameters[:, self.wfd.param_idx[extrinsic_param]] = value            
+                self.wfd.parameters[:, self.wfd.param_idx[extrinsic_param]] = value
         elif (idx == 0) and self.wfd.sample_extrinsic_only:
-            if self.wfd.sampling_from == 'posterior':
+            if self.wfd.sampling_from == "posterior":
                 self.wfd._cache_oversampled_parameters(self.wfd.nsamples)
-            elif self.wfd.sampling_from in ['mixed', 'all_event_mixed']:
+            elif self.wfd.sampling_from in ["mixed", "all_event_mixed"]:
                 self.wfd._cache_oversampled_parameters(self.wfd.nsamples)
-            print('Re-sampling exterior params for {} prior.'.format(self.wfd.sampling_from))
+            print("Re-sampling exterior params for {} prior.".format(self.wfd.sampling_from))
 
         # Obtain parameters and waveform
         p, h, w, snr = self.wfd.p_h_random_extrinsic(idx, self.train, self.wfd.sample_extrinsic_only)
@@ -2365,6 +2239,4 @@ class WaveformDatasetTorch(Dataset):
         x, y = self.wfd.x_y_from_p_h(p, h, add_noise=True)
 
         # Explicitly put the tensor w on the CPU, because default is CUDA.
-        return (torch.from_numpy(y), torch.from_numpy(x),
-                torch.tensor(w, device='cpu'),
-                torch.tensor(snr, device='cpu'))
+        return (torch.from_numpy(y), torch.from_numpy(x), torch.tensor(w, device="cpu"), torch.tensor(snr, device="cpu"))
