@@ -23,14 +23,14 @@ from functools import partial
 import torch
 import torch.nn.functional as F
 
-from megatron import get_args
-from megatron import print_rank_0
-from megatron import get_timers
-from megatron import mpu
-from megatron.data.dataset_utils import build_train_valid_test_datasets
-from megatron.model import WaveFormerModel
-from megatron.training import pretrain
-from megatron.utils import average_losses_across_data_parallel_group
+from src.model.denoising import get_args
+from src.model.denoising import print_rank_0
+from src.model.denoising import get_timers
+from src.model.denoising import mpu
+from src.model.denoising.data.dataset_utils import build_train_valid_test_datasets
+from src.model.denoising.model import WaveFormerModel
+from src.model.denoising.training import pretrain
+from src.model.denoising.utils import average_losses_across_data_parallel_group
 
 
 def model_provider(pre_process=True, post_process=True):
