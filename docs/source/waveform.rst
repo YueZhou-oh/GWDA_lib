@@ -22,7 +22,7 @@ You can adapt the configurations in `emri_demo.py <https://github.com/YueZhou-oh
     :linenos:
 
     $ conda activate waveform
-    $ cd /workspace/GWDA_lib/src/data/demos
+    $ cd /workspace/GWDA_lib/demos
     $ python emri_demo.py
     $ ls *EMRI*
     test_EMRI.hdf5

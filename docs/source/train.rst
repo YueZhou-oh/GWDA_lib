@@ -18,8 +18,8 @@ You can modify `tcn.yaml <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/m
     :linenos:
 
     $ conda activate waveform
-    $ cd cd /workspace/GWDA_lib/src/model/classify/examples
-    $ python train_tcn.py
+    $ cd cd /workspace/GWDA_lib/src/demos
+    $ python train_classify.py
 
 The output log can be seen as follows.
 
@@ -31,8 +31,7 @@ The output log can be seen as follows.
       Total parameters: 940.42K
       Trainable parameters: 940.42K
       Non-trainable parameters: 0
-      Epoch 1: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:01<00:00, 138.53it/s, loss=6.94e-01, acc=0.49]
-      0%|                                                                                                                                                                                                  | 0/200 [00:00<?, ?it/s]Time: 0.010484933853149414
+      Epoch 1: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:01<00:00, 138.53it/s, loss=6.94e-01, acc=0.49]                                                                                                                                                                                                 | 0/200 [00:00<?, ?it/s]Time: 0.010484933853149414
       100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:00<00:00, 223.66it/s, loss=6.91e-01, acc=0.5050]
       [2024-02-04 10:25:54,895][nn.trainer][INFO] - EPOCH 1   : lr=5.00e-05,   train_loss=6.94e-01,    train_acc=0.4900,       val_loss=6.91e-01       valid_acc=0.5050
       Epoch 2: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:01<00:00, 156.30it/s, loss=6.91e-01, acc=0.50]
@@ -52,7 +51,7 @@ You can modify configurations in `denoise_demo.sh <https://github.com/YueZhou-oh
     :linenos:
 
     $ conda activate base
-    $ cd /workspace/GWDA_lib/demo
+    $ cd /workspace/GWDA_lib/demos
     $ bash denoise_demo.sh
 
 The output log can be seen as follows.
@@ -134,8 +133,8 @@ Then, by running `train_se_mlp.py <https://github.com/YueZhou-oh/GWDA_lib/blob/m
     :linenos:
 
     $ conda activate waveform
-    $ cd cd /workspace/GWDA_lib/src/model/detection/
-    $ python train_se_mlp.py se-mlp.yaml
+    $ cd cd /workspace/GWDA_lib/demos/
+    $ python train_detection.py ../configsdetection.yaml
 
 The output log can be seen as follows.
 
@@ -161,82 +160,4 @@ The output log can be seen as follows.
       speechbrain.utils.checkpoints - Deleted checkpoint in results/detection_demo22/1607/save/CKPT+2024-02-02+15-55-58+00
       speechbrain.utils.epoch_loop - Going into epoch 3
 
-==============================================
-Parameter Estimation
-==============================================
-
-Firstly, activating ``waveform`` environment.
-Then, downloading waveform data ``GW150914_downsampled_posterior_samples.dat`` from `Zenodo <https://zenodo.org/uploads/10608761>`_.
-and put it under `dataset/pe/downsampled_posterior_samples_v1.0.0 <https://github.com/YueZhou-oh/GWDA_lib/tree/main/dataset/pe/downsampled_posterior_samples_v1.0.0>`_ folder.
-Finally, by running `run.sh <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/model/nflow/run.sh>`_ script, your own parameter estimation model can be trained. 
-
-.. code-block:: console
-    :linenos:
-
-    $ conda activate waveform
-    $ cd cd /workspace/GWDA_lib/src/model/nflow/
-    $ bash run.sh
-
-The output log can be seen as follows.
-
-.. code-block:: shell
-    :linenos:
-
-      Nestedspace(activation='elu', apply_unconditional_transform=False, base_transform_type='rq-coupling', basis_dir='../../../dataset/pe/GW150914_sample_prior_basis/', batch_norm=True, batch_size=2048, bw_dstar=None, cuda=True, data_dir='../../../dataset/pe/GW150914_sample_prior_basis/', detectors=None, distance_prior=None, distance_prior_fn='uniform_distance', dont_sample_extrinsic_only=False, dropout_probability=0.0, epochs=10000, flow_lr=None, hidden_dims=512, kl_annealing=True, lr=0.0001, lr_anneal_method='cosine', lr_annealing=True, mixed_alpha=0.0, mode='train', model_dir='models/GW170104_sample_uniform_100basis_all_uniform_prior/', model_source='new', model_type='nde', nbins=8, nflows=15, nsample=100000, nsamples_target_event=50000, num_transform_blocks=10, output_freq=10, sampling_from='uniform', save=True, save_aux_filename='waveforms_supplementary.hdf5', save_model_name='model.pt', snr_annealing=False, snr_threshold=None, steplr_gamma=0.5, steplr_step_size=80, tail_bound=1.0, transfer_epochs=0, truncate_basis=100)
-      Waveform directory ../../../dataset/pe/GW150914_sample_prior_basis/
-      Model directory models/GW170104_sample_uniform_100basis_all_uniform_prior/
-      Device cuda
-      Loading dataset
-      Sampling 100000 sets of parameters from uniform prior.
-      init training...
-      init relative whitening...
-      Truncating reduced basis from 600 to 100 elements.
-      initialidze reduced basis aux...
-      Building time translation matrices.
-      100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1001/1001 [00:19<00:00, 52.63it/s]
-      calculate threshold standardizatison...
-      Generating 90000 detector waveforms
-      Setting extrinsic parameters to fiducial values.
-      100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 90000/90000 [05:46<00:00, 259.74it/s]
-      Calculating new standardization factors.
-      Loading load_all_bilby_samples...
-      100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:01<00:00,  1.03s/it]
-      Loading load_all_event_strain...
-      0%|                                                                                                                                                                                                            | 0/1 [00:00<?, ?it/s]init relative whitening...
-      Building time translation matrices.
-      100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1001/1001 [00:18<00:00, 53.28it/s]
-      100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:19<00:00, 19.34s/it]
-      Detectors: ['H1', 'L1']
-
-      Constructing model of type nde
-
-      Initial learning rate 0.0001
-      Using cosine LR annealing.
-
-      Model hyperparameters:
-      input_dim        15
-      num_flow_steps   15
-      context_dim      400
-      base_transform_kwargs
-               hidden_dim      512
-               num_transform_blocks    10
-               activation      elu
-               dropout_probability     0.0
-               batch_norm      True
-               num_bins        8
-               tail_bound      1.0
-               apply_unconditional_transform   False
-               base_transform_type     rq-coupling
-
-      Training for 10000 epochs
-      Starting timer
-      Learning rate: 0.0001
-      Re-generating waveforms for uniform prior.
-      Setting extrinsic parameters to fiducial values.
-      Train Epoch: 1 [0/90000 (0%)]   Loss: 27.4751   Cost: 12.08s
-      Train Epoch: 1 [20480/90000 (23%)]      Loss: 22.0006   Cost: 4.84s
-      Train Epoch: 1 [40960/90000 (45%)]      Loss: 21.8823   Cost: 5.22s
-      Train Epoch: 1 [61440/90000 (68%)]      Loss: 21.4447   Cost: 4.57s
-      Train Epoch: 1 [81920/90000 (91%)]      Loss: 21.3464   Cost: 5.40s
-      Train Epoch: 1  Average Loss: 22.2120
 
