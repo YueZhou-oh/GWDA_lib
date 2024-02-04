@@ -10,7 +10,33 @@ Training examples of AI-centered model
 Signal Classification
 ===========================================
 
-TBA
+Firstly, activating ``waveform`` environment.
+Then, by running `train_tcn.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/model/classify/examples/train_tcn.py>`_ script, your own signal classification model can be trained. 
+You can modify `tcn.yaml <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/model/classify/configs/tcn.yaml>`_ to define your own training dataset as well as model configurations.
+
+.. code-block:: console
+    :linenos:
+
+    $ conda activate waveform
+    $ cd cd /workspace/GWDA_lib/src/model/classify/examples
+    $ python train_tcn.py
+
+The output log can be seen as follows.
+
+.. code-block:: shell
+    :linenos:
+
+      [2024-02-04 10:25:46,915][nn.dataloader][INFO] - Loading data from ../../../../dataset/detect//emri_asd_test.hdf5
+      Using Adam optimizer, lr=5e-05, weight_decay=0.001
+      Total parameters: 940.42K
+      Trainable parameters: 940.42K
+      Non-trainable parameters: 0
+      Epoch 1: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:01<00:00, 138.53it/s, loss=6.94e-01, acc=0.49]
+      0%|                                                                                                                                                                                                  | 0/200 [00:00<?, ?it/s]Time: 0.010484933853149414
+      100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:00<00:00, 223.66it/s, loss=6.91e-01, acc=0.5050]
+      [2024-02-04 10:25:54,895][nn.trainer][INFO] - EPOCH 1   : lr=5.00e-05,   train_loss=6.94e-01,    train_acc=0.4900,       val_loss=6.91e-01       valid_acc=0.5050
+      Epoch 2: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:01<00:00, 156.30it/s, loss=6.91e-01, acc=0.50]
+      0%|                                                                                                                                                                                                  | 0/200 [00:00<?, ?it/s]Time: 0.010904073715209961
 
 ==============================================
 Data Denoising

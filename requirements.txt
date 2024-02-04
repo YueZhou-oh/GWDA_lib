@@ -8,6 +8,7 @@ fftw
 gwdatafind
 gwpy
 gwsurrogate
+hydra-core
 imbalanced-learn==0.11.0
 lalsimulation
 lalsuite
@@ -17,10 +18,12 @@ lisaorbits
 nflows
 numpy
 matplotlib
+omegaconf
 pandas
 pillow
 pybind11
-PyCBC==2.0
+PyCBC
+rich
 scikit-learn
 scipy
 speechbrain
@@ -31,3 +34,4 @@ torchsummary
 torchtext
 torchvision
 transformers
+wandb
