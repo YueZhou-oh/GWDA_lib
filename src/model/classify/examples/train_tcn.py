@@ -1,27 +1,27 @@
 import sys
-
 sys.path.append("..")
 
 import os
-
 import hydra
 import numpy as np
 import torch
-from dataloader import EMRIDatasetTorch, TinyEMRIDataset
-from tcn import TCN
-from trainer import Trainer
 from matplotlib import pyplot as plt
 
 # import numpy as np
 from omegaconf import DictConfig, OmegaConf
 from rich import print
+
 from torch.utils.data import DataLoader, Dataset
 
 # from torchsummary import summary
 from tqdm import tqdm
 
+from nn.dataloader import EMRIDatasetTorch, TinyEMRIDataset
+from nn.tcn import TCN
+from nn.trainer import Trainer
 
-@hydra.main(version_base="1.2", config_path=".", config_name="tcn")
+
+@hydra.main(version_base="1.2", config_path="../configs", config_name="tcn")
 def main(config):
     os.environ["CUDA_VISIBLE_DEVICES"] = str(config.training.gpu)
     # Set device

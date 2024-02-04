@@ -92,7 +92,7 @@ class TinyEMRIDataset(object):
 
         log.info("Loading data from {}/{}".format(DIR, fn))
         load_waveform(data=[self.data, self.params], DIR=DIR, data_fn=fn)
-
+    
     def save(self, DIR, fn):
         save_waveform(data=[self.data, self.params], DIR=DIR, data_fn=fn)
 
@@ -110,14 +110,17 @@ class EMRIDatasetTorch(Dataset):
         self.n_signal = self.wfd.data[self.type_str]["signal"].shape[0]
 
     def __len__(self):
-        return self.wfd.data[self.type_str]["noise"].shape[0] + self.wfd.data[self.type_str]["signal"].shape[0]
+        return (
+            self.wfd.data[self.type_str]["noise"].shape[0]
+            + self.wfd.data[self.type_str]["signal"].shape[0]
+        )
         # for activation map
         # return 2
 
     def __getitem__(self, idx):
         if idx < self.n_signal:
-            # for activation map
-            # if idx == 0:
+        # for activation map
+        # if idx == 0:
             data = (
                 self.wfd.data[self.type_str]["signal"][idx][:, ::4]
                 # + self.wfd.data[self.type_str]["noise"][idx]
@@ -125,7 +128,9 @@ class EMRIDatasetTorch(Dataset):
             label = 1
         else:
             # idx -= self.n_signal
-            data = self.wfd.data[self.type_str]["noise"][idx - self.n_signal][:, ::4]
+            data = self.wfd.data[self.type_str]["noise"][
+                idx - self.n_signal
+            ][:, ::4]
             label = 0
         # data = np.log10(np.abs(data) + 1e-20)
         if np.isnan(data).any():

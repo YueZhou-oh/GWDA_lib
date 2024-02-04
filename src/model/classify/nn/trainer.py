@@ -11,7 +11,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 from torch.optim import SGD, Adadelta, Adagrad, Adam, AdamW, RMSprop
-from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, ExponentialLR, ReduceLROnPlateau, StepLR
+from torch.optim.lr_scheduler import (
+    CosineAnnealingLR,
+    CyclicLR,
+    ExponentialLR,
+    ReduceLROnPlateau,
+    StepLR,
+)
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 

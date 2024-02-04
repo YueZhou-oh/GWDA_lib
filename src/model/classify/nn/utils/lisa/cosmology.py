@@ -1,8 +1,6 @@
 import math
-
-import scipy.optimize as optim
 from scipy import integrate
-
+import scipy.optimize as optim
 from .constant import Constant
 
 
