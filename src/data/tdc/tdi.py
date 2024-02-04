@@ -262,4 +262,3 @@ class TDIWaveformGen(object):
             remove_sky_coords=True,
             t0=self.t0,
         )
-

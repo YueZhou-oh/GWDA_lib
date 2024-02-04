@@ -1,10 +1,11 @@
-import torch
-import h5py
 from pathlib import Path
+
+import h5py
 import numpy as np
+import torch
 
 
-class GW_SE_Dataset(object):
+class GWSEDataset(object):
     def __init__(self):
         self.waveform_dataset = {"train": {"noisy": [], "clean": []}, "test": {"noisy": [], "clean": []}}
 

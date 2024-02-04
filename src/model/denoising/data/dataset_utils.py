@@ -14,19 +14,17 @@
 # limitations under the License.
 
 import os
+
 from src.model.denoising.data.gw_dataset import GwDataset
 
-def build_train_valid_test_datasets(data_prefix, seq_length, segment_length):
 
+def build_train_valid_test_datasets(data_prefix, seq_length, segment_length):
     def build_dataset(name, folder):
-        dataset = GwDataset(name=name,
-                    data_prefix=folder,
-                    seq_length=seq_length,
-                    segment_length=segment_length)
+        dataset = GwDataset(name=name, data_prefix=folder, seq_length=seq_length, segment_length=segment_length)
         return dataset
 
-    train_dataset = build_dataset('train', os.path.join(data_prefix[0], 'train_data'))
-    valid_dataset = [build_dataset('valid', os.path.join(data_prefix[0], 'valid_data'))]
-    test_dataset = [build_dataset('test', os.path.join(data_prefix[0], 'test_data'))]
-    
+    train_dataset = build_dataset("train", os.path.join(data_prefix[0], "train_data"))
+    valid_dataset = [build_dataset("valid", os.path.join(data_prefix[0], "valid_data"))]
+    test_dataset = [build_dataset("test", os.path.join(data_prefix[0], "test_data"))]
+
     return (train_dataset, valid_dataset, test_dataset)

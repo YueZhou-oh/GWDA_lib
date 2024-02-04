@@ -2,11 +2,12 @@
 # Copyright (c) 2021 Peng Cheng Laboratory.
 # Licensed under the MIT license.
 
-from nflows import distributions, flows, transforms, utils
-import torch
-from torch.nn import functional as F
-import nflows.nn.nets as nn_
 import time
+
+import nflows.nn.nets as nn_
+import torch
+from nflows import distributions, flows, transforms, utils
+from torch.nn import functional as F
 
 
 def create_linear_transform(param_dim):
@@ -19,25 +20,12 @@ def create_linear_transform(param_dim):
         Transform -- nde.Transform object
     """
 
-    return transforms.CompositeTransform([
-        transforms.RandomPermutation(features=param_dim),
-        transforms.LULinear(param_dim, identity_init=True)
-    ])
+    return transforms.CompositeTransform([transforms.RandomPermutation(features=param_dim), transforms.LULinear(param_dim, identity_init=True)])
 
 
-def create_base_transform(i,
-                          param_dim,
-                          context_dim=None,
-                          hidden_dim=512,
-                          num_transform_blocks=2,
-                          activation='relu',
-                          dropout_probability=0.0,
-                          batch_norm=False,
-                          num_bins=8,
-                          tail_bound=1.,
-                          apply_unconditional_transform=False,
-                          base_transform_type='rq-coupling'
-                          ):
+def create_base_transform(
+    i, param_dim, context_dim=None, hidden_dim=512, num_transform_blocks=2, activation="relu", dropout_probability=0.0, batch_norm=False, num_bins=8, tail_bound=1.0, apply_unconditional_transform=False, base_transform_type="rq-coupling"
+):
     """Build a base NSF transform of x, conditioned on y.
 
     This uses the PiecewiseRationalQuadraticCoupling transform or
@@ -84,62 +72,58 @@ def create_base_transform(i,
         Transform -- the NSF transform
     """
 
-    if activation == 'elu':
+    if activation == "elu":
         activation_fn = F.elu
-    elif activation == 'relu':
+    elif activation == "relu":
         activation_fn = F.relu
-    elif activation == 'leaky_relu':
+    elif activation == "leaky_relu":
         activation_fn = F.leaky_relu
     else:
-        activation_fn = F.relu   # Default
-        print('Invalid activation function specified. Using ReLU.')
+        activation_fn = F.relu  # Default
+        print("Invalid activation function specified. Using ReLU.")
 
-    if base_transform_type == 'rq-coupling':
+    if base_transform_type == "rq-coupling":
         return transforms.PiecewiseRationalQuadraticCouplingTransform(
-            mask=utils.create_alternating_binary_mask(
-                param_dim, even=(i % 2 == 0)),
-            transform_net_create_fn=(lambda in_features, out_features:
-                                    nn_.ResidualNet(
-                                        in_features=in_features,
-                                        out_features=out_features,
-                                        hidden_features=hidden_dim,
-                                        context_features=context_dim,
-                                        num_blocks=num_transform_blocks,
-                                        activation=activation_fn,
-                                        dropout_probability=dropout_probability,
-                                        use_batch_norm=batch_norm
-                                    )
-                                    ),
+            mask=utils.create_alternating_binary_mask(param_dim, even=(i % 2 == 0)),
+            transform_net_create_fn=(
+                lambda in_features, out_features: nn_.ResidualNet(
+                    in_features=in_features,
+                    out_features=out_features,
+                    hidden_features=hidden_dim,
+                    context_features=context_dim,
+                    num_blocks=num_transform_blocks,
+                    activation=activation_fn,
+                    dropout_probability=dropout_probability,
+                    use_batch_norm=batch_norm,
+                )
+            ),
             num_bins=num_bins,
-            tails='linear',
+            tails="linear",
             tail_bound=tail_bound,
-            apply_unconditional_transform=apply_unconditional_transform
+            apply_unconditional_transform=apply_unconditional_transform,
         )
 
-    elif base_transform_type == 'rq-autoregressive':
+    elif base_transform_type == "rq-autoregressive":
         return transforms.MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
             features=param_dim,
             hidden_features=hidden_dim,
             context_features=context_dim,
             num_bins=num_bins,
-            tails='linear',
+            tails="linear",
             tail_bound=tail_bound,
             num_blocks=num_transform_blocks,
             use_residual_blocks=True,
             random_mask=False,
             activation=activation_fn,
             dropout_probability=dropout_probability,
-            use_batch_norm=batch_norm
+            use_batch_norm=batch_norm,
         )
 
     else:
         raise ValueError
 
 
-def create_transform(num_flow_steps,
-                     param_dim,
-                     context_dim,
-                     base_transform_kwargs):
+def create_transform(num_flow_steps, param_dim, context_dim, base_transform_kwargs):
     """Build a sequence of NSF transforms, which maps parameters x into the
     base distribution u (noise). Transforms are conditioned on strain data y.
 
@@ -163,20 +147,13 @@ def create_transform(num_flow_steps,
         Transform -- the constructed transform
     """
 
-    transform = transforms.CompositeTransform([
-        transforms.CompositeTransform([
-            create_linear_transform(param_dim),
-            create_base_transform(i, param_dim, context_dim=context_dim,
-                                  **base_transform_kwargs)
-        ]) for i in range(num_flow_steps)
-    ] + [
-        create_linear_transform(param_dim)
-    ])
+    transform = transforms.CompositeTransform(
+        [transforms.CompositeTransform([create_linear_transform(param_dim), create_base_transform(i, param_dim, context_dim=context_dim, **base_transform_kwargs)]) for i in range(num_flow_steps)] + [create_linear_transform(param_dim)]
+    )
     return transform
 
 
-def create_NDE_model(input_dim, context_dim, num_flow_steps,
-                     base_transform_kwargs):
+def create_NDE_model(input_dim, context_dim, num_flow_steps, base_transform_kwargs):
     """Build NSF (neural spline flow) model. This uses the nsf module
     available at https://github.com/bayesiains/nsf.
 
@@ -197,19 +174,13 @@ def create_NDE_model(input_dim, context_dim, num_flow_steps,
     """
 
     distribution = distributions.StandardNormal((input_dim,))
-    transform = create_transform(
-        num_flow_steps, input_dim, context_dim, base_transform_kwargs)
+    transform = create_transform(num_flow_steps, input_dim, context_dim, base_transform_kwargs)
     flow = flows.Flow(transform, distribution)
 
     # Store hyperparameters. This is for reconstructing model when loading from
     # saved file.
 
-    flow.model_hyperparams = {
-        'input_dim': input_dim,
-        'num_flow_steps': num_flow_steps,
-        'context_dim': context_dim,
-        'base_transform_kwargs': base_transform_kwargs
-    }
+    flow.model_hyperparams = {"input_dim": input_dim, "num_flow_steps": num_flow_steps, "context_dim": context_dim, "base_transform_kwargs": base_transform_kwargs}
 
     return flow
 
@@ -224,13 +195,11 @@ def anneal_schedule(epoch, quiet=False):
     else:
         exponent = 0.0
     if not quiet:
-        print('Setting annealing exponent to {}.'.format(exponent))
+        print("Setting annealing exponent to {}.".format(exponent))
     return exponent
 
 
-def train_epoch(flow, train_loader, optimizer, epoch,
-                device=None,
-                output_freq=50, add_noise=True, annealing=False):
+def train_epoch(flow, train_loader, optimizer, epoch, device=None, output_freq=50, add_noise=True, annealing=False):
     """Train model for one epoch.
 
     Arguments:
@@ -263,25 +232,24 @@ def train_epoch(flow, train_loader, optimizer, epoch,
 
         snr_threshold = 2 * anneal_exponent
         if snr_threshold > 0.0:
-            print('SNR threshold: {}'.format(snr_threshold))
+            print("SNR threshold: {}".format(snr_threshold))
             wfd.snr_threshold = snr_threshold
         else:
             wfd.snr_threshold = None
 
         if anneal_exponent >= 2.0:
-            wfd.importance_sampling = 'inverse_distance'
+            wfd.importance_sampling = "inverse_distance"
         elif anneal_exponent >= 1.0:
-            wfd.importance_sampling = 'uniform_distance'
+            wfd.importance_sampling = "uniform_distance"
         else:
-            wfd.importance_sampling = 'linear_distance'
-        print('Importance sampling: {}'.format(wfd.importance_sampling))
+            wfd.importance_sampling = "linear_distance"
+        print("Importance sampling: {}".format(wfd.importance_sampling))
 
         snr_threshold = torch.tensor(snr_threshold).to(device)
 
     anneal_exponent = torch.tensor(anneal_exponent).to(device)
     start_time = time.time()
     for batch_idx, (h, x, w, snr) in enumerate(train_loader):
-        
         optimizer.zero_grad()
 
         if device is not None:
@@ -293,12 +261,12 @@ def train_epoch(flow, train_loader, optimizer, epoch,
         if add_noise:
             # Sample a noise realization
             y = h + torch.randn_like(h)
-            print('Should not be here')
+            print("Should not be here")
         else:
             y = h
 
         # Compute log prob
-        loss = - flow.log_prob(x, context=y)
+        loss = -flow.log_prob(x, context=y)
 
         if anneal_exponent > 0.0:
             anneal_factor = (snr - snr_threshold) ** anneal_exponent
@@ -319,23 +287,17 @@ def train_epoch(flow, train_loader, optimizer, epoch,
         optimizer.step()
 
         if (output_freq is not None) and (batch_idx % output_freq == 0):
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.4f}\tCost: {:.2f}s'.format(
-                epoch, batch_idx *
-                train_loader.batch_size, len(train_loader.dataset),
-                100. * batch_idx / len(train_loader),
-                loss.item(), time.time()-start_time))
+            print("Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.4f}\tCost: {:.2f}s".format(epoch, batch_idx * train_loader.batch_size, len(train_loader.dataset), 100.0 * batch_idx / len(train_loader), loss.item(), time.time() - start_time))
             start_time = time.time()
 
     train_loss = train_loss.item() / len(train_loader.dataset)
     # train_loss = train_loss.item() / total_weight.item()
-    print('Train Epoch: {} \tAverage Loss: {:.4f}'.format(
-        epoch, train_loss))
+    print("Train Epoch: {} \tAverage Loss: {:.4f}".format(epoch, train_loss))
 
     return train_loss
 
 
-def test_epoch(flow, test_loader, epoch, device=None, add_noise=True,
-               annealing=False):
+def test_epoch(flow, test_loader, epoch, device=None, add_noise=True, annealing=False):
     """Calculate test loss for one epoch.
 
     Arguments:
@@ -364,7 +326,6 @@ def test_epoch(flow, test_loader, epoch, device=None, add_noise=True,
         test_loss = 0.0
         total_weight = 0.0
         for h, x, w, snr in test_loader:
-
             if device is not None:
                 h = h.to(device, non_blocking=True)
                 x = x.to(device, non_blocking=True)
@@ -378,7 +339,7 @@ def test_epoch(flow, test_loader, epoch, device=None, add_noise=True,
                 y = h
 
             # Compute log prob
-            loss = - flow.log_prob(x, context=y)
+            loss = -flow.log_prob(x, context=y)
 
             if anneal_exponent > 0.0:
                 anneal_factor = (snr - snr_threshold) ** anneal_exponent
@@ -393,8 +354,7 @@ def test_epoch(flow, test_loader, epoch, device=None, add_noise=True,
 
         test_loss = test_loss.item() / len(test_loader.dataset)
         # test_loss = test_loss.item() / total_weight.item()
-        print('Test set: Average loss: {:.4f}\n'
-              .format(test_loss))
+        print("Test set: Average loss: {:.4f}\n".format(test_loss))
 
         return test_loss
 
