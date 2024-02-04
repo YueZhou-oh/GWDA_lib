@@ -12,7 +12,7 @@ Install
 
 To use GWDA, we strongly recommend using the release of `GWDA container <https://hub.docker.com/layers/zzhopezhou/astropre/gwda/images/sha256-38d1ce5842c31632cb96da1e542d0e10ab1732fb29696e9798a984af0fb2cdd8?context=repo>`_ with GPU nodes.
 
-You can launch an instance of the `astropre container <https://hub.docker.com/layers/zzhopezhou/astropre/gwda/images/sha256-38d1ce5842c31632cb96da1e542d0e10ab1732fb29696e9798a984af0fb2cdd8?context=repo>`_ container and 
+You can launch an instance of the `astropre container <https://hub.docker.com/layers/zzhopezhou/astropre/gwda/images/sha256-38d1ce5842c31632cb96da1e542d0e10ab1732fb29696e9798a984af0fb2cdd8?context=repo>`_ and 
 mount `GWDA <https://github.com/YueZhou-oh/GWDA_lib>`_ as well as your dataset with the following Docker commands.
 
 .. code-block:: console
