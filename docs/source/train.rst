@@ -11,8 +11,8 @@ Signal Classification
 ===========================================
 
 Firstly, activating ``waveform`` environment.
-Then, by running `train_tcn.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/model/classify/examples/train_tcn.py>`_ script, your own signal classification model can be trained. 
-You can modify `tcn.yaml <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/model/classify/configs/tcn.yaml>`_ to define your own training dataset as well as model configurations.
+Then, by running `train_classify.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demos/train_classify.py>`_ script, your own signal classification model can be trained. 
+You can modify `classify.yaml <https://github.com/YueZhou-oh/GWDA_lib/blob/main/configs/classify.yaml>`_ to define your own training dataset as well as model configurations.
 
 .. code-block:: console
     :linenos:
@@ -26,7 +26,7 @@ The output log can be seen as follows.
 .. code-block:: shell
     :linenos:
 
-      [2024-02-04 10:25:46,915][nn.dataloader][INFO] - Loading data from ../../../../dataset/detect//emri_asd_test.hdf5
+      [2024-02-04 10:25:46,915][nn.dataloader][INFO] - Loading data from ../datasets/detection/emri_asd_test.hdf5
       Using Adam optimizer, lr=5e-05, weight_decay=0.001
       Total parameters: 940.42K
       Trainable parameters: 940.42K
@@ -42,7 +42,7 @@ Data Denoising
 ==============================================
 
 Firstly, downloading demo dataset (``train_data, valid_data, test_data``) from `this repository <https://github.com/AI-HPC-Research-Team/LIGO_noise_suppression>`_.
-and put it under `dataset/denoise <https://github.com/YueZhou-oh/GWDA_lib/tree/main/dataset/denoise>`_ folder.
+and put it under `datasets/denoise <https://github.com/YueZhou-oh/GWDA_lib/tree/main/datasets/denoise>`_ folder.
 By running `denoise_demo.sh <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demo/denoise_demo.sh>`_ script, your own denoising model can be trained. 
 
 You can modify configurations in `denoise_demo.sh <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demo/denoise_demo.sh>`_ to build your own model with different model size.
@@ -127,14 +127,14 @@ Signal Detection
 ==============================================
 
 Firstly, activating ``waveform`` environment.
-Then, by running `train_se_mlp.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/model/detection/train_se_mlp.py>`_ script, your own detection model can be trained. 
+Then, by running `train_detection.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demos/train_detection.py>`_ script, your own detection model can be trained. 
 
 .. code-block:: console
     :linenos:
 
     $ conda activate waveform
     $ cd cd /workspace/GWDA_lib/demos/
-    $ python train_detection.py ../configsdetection.yaml
+    $ python train_detection.py ../configs/detection.yaml
 
 The output log can be seen as follows.
 

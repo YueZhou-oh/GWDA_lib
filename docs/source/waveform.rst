@@ -12,11 +12,11 @@ Examples of space-based gravitational wave signal generation
 EMRIs waveform
 ===============
 
-By running `emri_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/data/demos/emri_demo.py>`_ script, a EMRIs waveform example is generated. 
+By running `emri_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demos/emri_demo.py>`_ script, a EMRIs waveform example is generated. 
 
 The default signal length is two years and default sampling rate is 10 seconds, 
 and the generated waveform is saved at the same directory as ``test_EMRI.hdf5``.
-You can adapt the configurations in `emri_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/data/demos/emri_demo.py>`_ according to your own needs.
+You can adapt the configurations in `emri_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demos/emri_demo.py>`_ according to your own needs.
 
 .. code-block:: console
     :linenos:
@@ -85,7 +85,7 @@ MBHB waveform
 The MBHB waveform generation process is similar as :ref:`emri`.
 Hence, we only give a brief introduction here.
 
-1. Generate waveform by running `mbhb_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/data/demos/mbhb_demo.py>`_.
+1. Generate waveform by running `mbhb_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demos/mbhb_demo.py>`_.
 2. Visulize the generated waveform by running ``plot_waveform.py`` (you only need to choose the corresponding GW source as shown below).
 
 .. code-block:: python
@@ -110,7 +110,7 @@ SGWB waveform
 The SGWB waveform generation process is similar as :ref:`emri`.
 Hence, we only give a brief introduction here.
 
-1. Generate waveform by running `sgwb_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/data/demos/sgwb_demo.py>`_.
+1. Generate waveform by running `sgwb_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demos/sgwb_demo.py>`_.
 2. Visulize the generated waveform by running ``plot_waveform.py`` (you only need to choose the corresponding GW source as shown below).
 
 .. code-block:: python
@@ -134,7 +134,7 @@ VGB waveform
 The VGB waveform generation process is similar as :ref:`emri`.
 Hence, we only give a brief introduction here.
 
-1. Generate waveform by running `vgb_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/src/data/demos/vgb_demo.py>`_.
+1. Generate waveform by running `vgb_demo.py <https://github.com/YueZhou-oh/GWDA_lib/blob/main/demos/vgb_demo.py>`_.
 2. Visulize the generated waveform by running ``plot_waveform.py`` (you only need to choose the corresponding GW source as shown below).
 
 .. code-block:: python
