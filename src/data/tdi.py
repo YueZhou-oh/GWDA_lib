@@ -9,8 +9,8 @@ import functools
 import numpy as np
 from fastlisaresponse import ResponseWrapper
 
-from utils.lisa.constant import Constant
-from utils.log_utils import MyLogger
+from ..utils.lisa.constant import Constant
+from ..utils.log_utils import MyLogger
 from .waveform import AAK, GB, MBHB
 
 # -------------------------------------
