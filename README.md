@@ -1,5 +1,5 @@
-# GWDA_lib
-AI-centered GWDA platform
+This is a pre repo.
 
-For detailed tutorial of GWDA
-- [Install and Usage tutorial](https://gwda-lib.readthedocs.io/en/latest/index.html)
+For our official release. please visit [GWAI](https://github.com/AI-HPC-Research-Team/GWAI)
+
+Thanks. O_o
