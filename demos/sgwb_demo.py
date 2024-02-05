@@ -1,3 +1,4 @@
+from pathlib import Path
 import sys
 
 sys.path.append("..")
@@ -62,7 +63,9 @@ def gen_sgwb(wg, psd):
 
 def main():
     use_gpu = False
-    orbit_file = "../src/data/tdc/orbit/taiji-orbit.hdf5"
+    
+    p = Path.cwd().parent
+    orbit_file = p / "src/data/orbit/taiji-orbit.hdf5"
 
     tdiwg = TDIWaveformGen(T=2.0, use_gpu=use_gpu, det="Taiji", orbit_file=orbit_file)
 

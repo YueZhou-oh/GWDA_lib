@@ -5,7 +5,7 @@ try:
     import cupy as xp
 except (ImportError, ModuleNotFoundError) as e:
     import numpy as xp
-
+from pathlib import Path
 import h5py
 import numpy as np
 from src.data.tdi import TDIWaveformGen
@@ -13,7 +13,9 @@ from src.data.tdi import TDIWaveformGen
 
 def main():
     use_gpu = False
-    orbit_file = "../src/data/tdc/orbit/taiji-orbit.hdf5"
+    
+    p = Path.cwd().parent
+    orbit_file = p / "src/data/orbit/taiji-orbit.hdf5"
 
     tdiwg = TDIWaveformGen(T=2.0, use_gpu=use_gpu, det="Taiji", orbit_file=orbit_file)
     tdiwg.init_EMRI()

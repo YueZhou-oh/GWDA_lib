@@ -8,8 +8,8 @@ from bidict import bidict
 from few.waveform import Pn5AAKWaveform
 from pycbc.waveform import get_td_waveform
 
-from utils.lisa.constant import Constant
-from utils.log_utils import MyLogger, TimerLog
+from ..utils.lisa.constant import Constant
+from ..utils.log_utils import MyLogger, TimerLog
 
 mylogger = MyLogger(__name__)
 
