@@ -7,28 +7,10 @@ Citations
 
 If you use any code from GWDA in a scientific publication, please citing the relevent publications as described below.
 
-
-Citing the GWDA Software 
-
-
-DOI
-
-
-Citing the publications that describe the algorithms
-
-
-GWDA integrated a large number of data-analysis algorithms and so it is not
-possible to give one single citation. To give proper scientific credit for the
-development of PyCBC, in addition to citing the DOI from the software, please
-cite the appropriate scientific publications below.
-
-
-Citing the publications that describe the data
-
-
-TBA
-
-
-Citing the publications that describe the data
-
-TBA
+- GWDA <TBA>
+- `WaveFormer: transformer-based denoising method for gravitational-wave data <https://arxiv.org/abs/2212.14283>`_
+- `Megatron-LM paper series <https://github.com/NVIDIA/Megatron-LM>`_
+- `Space-based gravitational wave signal detection and extraction with deep neural network <https://www.nature.com/articles/s42005-023-01334-6>`_
+- `SpeechBrain: A General-Purpose Speech Toolkit <https://arxiv.org/abs/2106.04624>`_
+- `DECODE: DilatEd COnvolutional neural network for Detecting Extreme-mass-ratio inspirals <https://arxiv.org/abs/2308.16422>`_
+- `Taiji data challenge for exploring gravitational wave universe <https://link.springer.com/article/10.1007/s11467-023-1318-y>`_
